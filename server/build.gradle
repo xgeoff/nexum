@@ -1,0 +1,64 @@
+plugins {
+    id("io.micronaut.application") version "4.3.4"
+    id("io.micronaut.aot") version "4.3.4"
+    id("java")
+}
+
+version = "0.1"
+group = "biz.digitalindustry.graphdb"
+
+repositories {
+    mavenCentral()
+}
+
+micronaut {
+    version(micronautVersion)
+    runtime("netty")
+    testRuntime("junit5")
+    processing {
+        incremental(true)
+        annotations("biz.digitalindustry.graphdb.*")
+    }
+}
+
+dependencies {
+    implementation(project(":app"))
+    implementation("io.micronaut:micronaut-http-server-netty:${micronautVersion}")
+    implementation("io.micronaut:micronaut-runtime:${micronautVersion}")
+    implementation("io.micronaut:micronaut-jackson-databind:${micronautVersion}")
+    implementation("jakarta.annotation:jakarta.annotation-api")
+    implementation("jakarta.inject:jakarta.inject-api")
+
+    // Optional: Logging
+    runtimeOnly("ch.qos.logback:logback-classic:1.4.14")
+
+    // Optional: If using Micronaut validation
+    implementation("io.micronaut.validation:micronaut-validation:${micronautVersion}")
+
+    // Testing
+    testImplementation("io.micronaut.test:micronaut-test-junit5:${micronautVersion}")
+    testImplementation("io.micronaut:micronaut-http-client:${micronautVersion}")
+    testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.0")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.0")
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs = ["src/main"]
+        }
+    }
+}
+
+application {
+    mainClass.set("biz.digitalindustry.db.server.Application")
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+}
