@@ -110,6 +110,12 @@ public final class ExactMatchIndexManager {
         return new LinkedHashSet<>(indexesByNamespace.keySet());
     }
 
+    public synchronized ExactMatchIndexManager copy() {
+        ExactMatchIndexManager copy = new ExactMatchIndexManager();
+        copy.decode(encode());
+        return copy;
+    }
+
     public synchronized byte[] encodeNamespace(String namespace) {
         ExactMatchIndex<Object> index = indexesByNamespace.get(namespace);
         if (index == null) {

@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Server Query Guide</title>
+    <meta name="description" content="The current Cypher-like and SQL-like subset exposed by the Nexum Micronaut transport layer.">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/normalize.css">
+    <link rel="stylesheet" href="css/skeleton.css">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" type="image/png" href="images/favicon-32.png">
+</head>
+<body class="theme-shell theme-docs">
+<div class="shell">
+    <div class="sidebar">
+    <div class="sidebar__brand">
+        <a class="sidebar__brand-link" href="/">
+            <span class="sidebar__mark"></span>
+            <span>
+                <strong>Nexum</strong>
+                <small>Native database</small>
+            </span>
+        </a>
+    </div>
+    <p class="sidebar__tagline">A modern, high-performance database built around one native storage core.</p>
+    <nav class="sidebar__nav">
+        <p class="sidebar__section-title">Documentation</p>
+        <ul>
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/architecture.html">Architecture</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/concurrency-model.html">Concurrency Model</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/index.html">Overview</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/object-facade.html">Object Facade</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/relational-facade.html">Relational Facade</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/server-query-guide.html">Server Query Guide</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/unified-engine-model.html">Unified Engine Model</a></li>
+
+
+        
+        </ul>
+    </nav>
+</div>
+
+    <main class="page-frame">
+        <section class="hero-panel hero-panel--query">
+            <p class="eyebrow">Transport Guide</p>
+            <h1>Server Query Guide</h1>
+            <p class="hero-copy">The built-in server is a narrow HTTP surface over app-owned query providers. Cypher routes into the graph facade and SQL routes into the relational facade.</p>
+            <div class="query-banner">
+                <span>Cypher -> graph facade</span>
+                <span>SQL -> relational facade</span>
+                <span>Server -> transport only</span>
+            </div>
+        </section>
+        <section class="content-panel prose prose--docs prose--query">
+<h1 id="server-query-guide">Server Query Guide</h1>
+<p>This document describes the current native storage-backed query subset implemented by the Micronaut server.</p>
+<p>The server is only the HTTP transport layer. Query semantics live in the app module under <code>biz.digitalindustry.storage.query.*</code>.</p>
+<p>Primary entry point:</p>
+<ul>
+<li><code>POST /query</code></li>
+</ul>
+<p>Configuration:</p>
+<ul>
+<li><code>graph.db.path=/path/to/database.dbs</code></li>
+<li><code>relational.db.path=/path/to/relational.dbs</code></li>
+</ul>
+<p>The server routes:</p>
+<ul>
+<li><code>cypher</code> queries to the graph facade through <code>CypherQueryProvider</code></li>
+<li><code>sql</code> queries to the relational facade through <code>SqlQueryProvider</code></li>
+</ul>
+<h2 id="request-shape">Request Shape</h2>
+<p>Cypher-like:</p>
+<pre><code class="language-json">{ "cypher": "MATCH (n) RETURN n" }
+</code></pre>
+<p>SQL-like:</p>
+<pre><code class="language-json">{ "sql": "SELECT * FROM users" }
+</code></pre>
+<h2 id="supported-cypher-like-operations">Supported Cypher-like Operations</h2>
+<p>Create a node:</p>
+<pre><code class="language-cypher">CREATE (n:Person {id:'alice'})
+</code></pre>
+<p>Create an edge and upsert endpoints:</p>
+<pre><code class="language-cypher">CREATE (a:Person {id:'alice'})-[:KNOWS {weight:2.5}]-&gt;(b:Person {id:'bob'})
+</code></pre>
+<p>Read nodes:</p>
+<pre><code class="language-cypher">MATCH (n) RETURN n
+MATCH (n {id:'alice'}) RETURN n
+MATCH (n:Person) RETURN n
+</code></pre>
+<p>Traverse outgoing neighbors:</p>
+<pre><code class="language-cypher">MATCH (a {id:'alice'})-[:KNOWS]-&gt;(b) RETURN b
+MATCH (a {id:'alice'})-[]-&gt;(b) RETURN b
+</code></pre>
+<p>Read edges:</p>
+<pre><code class="language-cypher">MATCH (a {id:'alice'})-[:KNOWS]-&gt;(b) RETURN edge
+MATCH (a)-[]-&gt;(b) RETURN edge
+</code></pre>
+<p>Update:</p>
+<pre><code class="language-cypher">MATCH (n {id:'alice'}) SET n:Engineer
+MATCH (a {id:'alice'})-[r:KNOWS]-&gt;(b {id:'bob'}) SET r.weight = 4.5
+</code></pre>
+<p>Delete:</p>
+<pre><code class="language-cypher">MATCH (a {id:'alice'})-[r:KNOWS]-&gt;(b {id:'bob'}) DELETE r
+MATCH (n {id:'bob'}) DELETE n
+</code></pre>
+<h2 id="supported-sql-like-operations">Supported SQL-like Operations</h2>
+<p>Create schema:</p>
+<pre><code class="language-sql">CREATE TABLE users (id STRING PRIMARY KEY, name STRING NOT NULL, age LONG NOT NULL, active BOOLEAN NOT NULL)
+CREATE INDEX users_name_idx ON users (name)
+</code></pre>
+<p>Insert:</p>
+<pre><code class="language-sql">INSERT INTO users (id, name, age, active) VALUES ('u1', 'Ada', 37, true)
+</code></pre>
+<p>Read:</p>
+<pre><code class="language-sql">SELECT * FROM users
+SELECT * FROM users WHERE id = 'u1'
+SELECT * FROM users WHERE name = 'Ada'
+SELECT * FROM users WHERE age BETWEEN 30 AND 40
+</code></pre>
+<p>Update:</p>
+<pre><code class="language-sql">UPDATE users SET name = 'Ada Lovelace', active = false WHERE id = 'u1'
+</code></pre>
+<p>Delete:</p>
+<pre><code class="language-sql">DELETE FROM users WHERE id = 'u1'
+</code></pre>
+<h2 id="response-notes">Response Notes</h2>
+<p>Row results include:</p>
+<ul>
+<li><code>entityType=row</code></li>
+<li>user-defined column properties</li>
+<li>row id mapped to the relational primary key value</li>
+</ul>
+<h2 id="constraints">Constraints</h2>
+<ul>
+<li>the syntax is pattern-based, not a general parser</li>
+<li>SQL support is currently single-table only</li>
+<li>SQL schema definitions are narrow and explicit</li>
+<li>relational schema is restored from persisted engine schema on reopen</li>
+</ul>
+
+        </section>
+    </main>
+</div>
+</body>
+</html>

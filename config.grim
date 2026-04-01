@@ -1,0 +1,4 @@
+title = "Nexum"
+baseUrl = "/"
+outputDir = "docs"
+sourceDir = "site"

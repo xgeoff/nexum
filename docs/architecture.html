@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Architecture</title>
+    <meta name="description" content="Layering, ownership boundaries, and module responsibilities across the Nexum engine, facades, query layer, and server.">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/normalize.css">
+    <link rel="stylesheet" href="css/skeleton.css">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" type="image/png" href="images/favicon-32.png">
+</head>
+<body class="theme-shell theme-docs">
+<div class="shell">
+    <div class="sidebar">
+    <div class="sidebar__brand">
+        <a class="sidebar__brand-link" href="/">
+            <span class="sidebar__mark"></span>
+            <span>
+                <strong>Nexum</strong>
+                <small>Native database</small>
+            </span>
+        </a>
+    </div>
+    <p class="sidebar__tagline">A modern, high-performance database built around one native storage core.</p>
+    <nav class="sidebar__nav">
+        <p class="sidebar__section-title">Documentation</p>
+        <ul>
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/architecture.html">Architecture</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/concurrency-model.html">Concurrency Model</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/index.html">Overview</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/object-facade.html">Object Facade</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/relational-facade.html">Relational Facade</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/server-query-guide.html">Server Query Guide</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/unified-engine-model.html">Unified Engine Model</a></li>
+
+
+        
+        </ul>
+    </nav>
+</div>
+
+    <main class="page-frame">
+        <section class="hero-panel hero-panel--systems">
+            <div class="hero-panel__grid">
+                <div>
+                    <p class="eyebrow">System Design</p>
+                    <h1>Architecture</h1>
+                    <p class="hero-copy">Nexum keeps persistence, indexing, recovery, and schema concerns inside one native core, then layers graph, relational, object, and query surfaces over that shared engine.</p>
+                </div>
+                <div class="hero-metric">
+                    <span class="hero-metric__label">Architecture Goal</span>
+                    <strong>One fast storage spine</strong>
+                    <p>The design avoids duplicate persistence stacks so optimizations land once and benefit every facade.</p>
+                </div>
+            </div>
+        </section>
+        <section class="content-panel prose prose--docs">
+<h1 id="architecture">Architecture</h1>
+<p>Status: active architecture</p>
+<p>Nexum is organized under <code>biz.digitalindustry.storage.*</code>.</p>
+<p>At a high level:</p>
+<ol>
+<li>One native storage core owns persistence, recovery, schema primitives, and indexes.</li>
+<li>Graph, relational, and object modules are façades over that shared core.</li>
+<li>Query providers live in the product layer and target those façades.</li>
+<li>The built-in server is only a transport layer over the app-owned providers and maintenance APIs.</li>
+</ol>
+<h2 id="layering">Layering</h2>
+<p>Dependency direction:</p>
+<ul>
+<li><code>storage.engine</code> -&gt; storage internals</li>
+<li><code>storage.graph|relational|object</code> -&gt; shared storage engine</li>
+<li><code>storage.query.cypher</code> -&gt; graph facade</li>
+<li><code>storage.query.sql</code> -&gt; relational facade</li>
+<li><code>storage.server</code> -&gt; query providers and service wrappers</li>
+</ul>
+<p>The server does not own query semantics.</p>
+<h2 id="storage-core">Storage Core</h2>
+<p>Primary engine/runtime classes:</p>
+<ul>
+<li><a href="../app/src/main/java/biz/digitalindustry/storage/engine/NativeStorageEngine.java"><code>NativeStorageEngine.java</code></a></li>
+<li><a href="../app/src/main/java/biz/digitalindustry/storage/store/PageBackedRecordStore.java"><code>PageBackedRecordStore.java</code></a></li>
+<li><a href="../app/src/main/java/biz/digitalindustry/storage/engine/NativeIndexStore.java"><code>NativeIndexStore.java</code></a></li>
+<li><a href="../app/src/main/java/biz/digitalindustry/storage/page/PageFile.java"><code>PageFile.java</code></a></li>
+<li><a href="../app/src/main/java/biz/digitalindustry/storage/log/WriteAheadLog.java"><code>WriteAheadLog.java</code></a></li>
+</ul>
+<p>Core responsibilities:</p>
+<ul>
+<li>record-oriented durable storage</li>
+<li>WAL-backed commit/recovery</li>
+<li>persisted engine schema metadata</li>
+<li>exact-match and ordered/range indexes</li>
+<li>checkpointing and WAL compaction</li>
+<li>file-backed and true memory-only modes</li>
+</ul>
+<h2 id="product-modules">Product Modules</h2>
+<p>Graph:</p>
+<ul>
+<li><a href="../app/src/main/java/biz/digitalindustry/storage/graph/api/GraphStore.java"><code>GraphStore.java</code></a></li>
+<li><a href="../app/src/main/java/biz/digitalindustry/storage/graph/engine/NativeGraphStore.java"><code>NativeGraphStore.java</code></a></li>
+</ul>
+<p>Relational:</p>
+<ul>
+<li><a href="../app/src/main/java/biz/digitalindustry/storage/relational/api/RelationalStore.java"><code>RelationalStore.java</code></a></li>
+<li><a href="../app/src/main/java/biz/digitalindustry/storage/relational/api/TableDefinition.java"><code>TableDefinition.java</code></a></li>
+<li><a href="../app/src/main/java/biz/digitalindustry/storage/relational/engine/NativeRelationalStore.java"><code>NativeRelationalStore.java</code></a></li>
+</ul>
+<p>Object:</p>
+<ul>
+<li><a href="../app/src/main/java/biz/digitalindustry/storage/object/api/ObjectStore.java"><code>ObjectStore.java</code></a></li>
+<li><a href="../app/src/main/java/biz/digitalindustry/storage/object/api/ObjectType.java"><code>ObjectType.java</code></a></li>
+<li><a href="../app/src/main/java/biz/digitalindustry/storage/object/engine/NativeObjectStore.java"><code>NativeObjectStore.java</code></a></li>
+</ul>
+<p>Each module uses shared storage primitives instead of owning separate persistence implementations.</p>
+<h2 id="query-layer">Query Layer</h2>
+<p>Query providers are app-owned:</p>
+<ul>
+<li><a href="../app/src/main/java/biz/digitalindustry/storage/query/QueryProvider.java"><code>QueryProvider.java</code></a></li>
+<li><a href="../app/src/main/java/biz/digitalindustry/storage/query/QueryProviderRegistry.java"><code>QueryProviderRegistry.java</code></a></li>
+<li><a href="../app/src/main/java/biz/digitalindustry/storage/query/cypher/CypherQueryProvider.java"><code>CypherQueryProvider.java</code></a></li>
+<li><a href="../app/src/main/java/biz/digitalindustry/storage/query/sql/SqlQueryProvider.java"><code>SqlQueryProvider.java</code></a></li>
+</ul>
+<p>Current mapping:</p>
+<ul>
+<li>Cypher -&gt; graph facade</li>
+<li>SQL -&gt; relational facade</li>
+</ul>
+<p>This lets embedders choose between:</p>
+<ul>
+<li>using façades directly</li>
+<li>using query providers directly</li>
+<li>building their own language layer</li>
+</ul>
+<h2 id="server-layer">Server Layer</h2>
+<p>The built-in Micronaut server is transport and service wiring only:</p>
+<ul>
+<li><a href="../server/src/main/biz/digitalindustry/storage/server/Application.java"><code>Application.java</code></a></li>
+<li><a href="../server/src/main/biz/digitalindustry/storage/server/controller/QueryController.java"><code>QueryController.java</code></a></li>
+<li><a href="../server/src/main/biz/digitalindustry/storage/server/controller/MaintenanceController.java"><code>MaintenanceController.java</code></a></li>
+<li><a href="../server/src/main/biz/digitalindustry/storage/server/service/QueryProviderFactory.java"><code>QueryProviderFactory.java</code></a></li>
+</ul>
+<p>It exposes:</p>
+<ul>
+<li><code>POST /query</code></li>
+<li><code>GET /admin/maintenance</code></li>
+<li><code>POST /admin/maintenance/checkpoint</code></li>
+</ul>
+<p>It does not define Cypher or SQL semantics itself.</p>
+<h2 id="concurrency-model">Concurrency Model</h2>
+<p>Nexum currently standardizes on single-writer/multi-reader access.</p>
+<ul>
+<li>concurrent readers are allowed</li>
+<li>writes are exclusive</li>
+<li>readers may overlap with the single writer</li>
+<li>readers see only last committed state while the writer uses a private overlay</li>
+<li>write-path checkpointing is operator-controlled rather than automatically blocking commits</li>
+</ul>
+<p>See <a href="./concurrency-model.md"><code>concurrency-model.md</code></a>.</p>
+<h2 id="schema-model">Schema Model</h2>
+<p>The engine persists schema metadata in native engine state.</p>
+<ul>
+<li>graph/object/relational modules register explicit schema definitions</li>
+<li>relational tables are reconstructed from persisted engine schema on reopen</li>
+<li>no separate relational schema file is required</li>
+</ul>
+<h2 id="current-limits">Current Limits</h2>
+<ul>
+<li>query providers are pattern-driven, not full parsers</li>
+<li>SQL is single-table and narrow, not full ANSI SQL</li>
+<li>concurrency is SWMR, not MVCC or multi-writer</li>
+<li>some native index structural delete paths still fall back to rebuild behavior</li>
+</ul>
+
+        </section>
+    </main>
+</div>
+</body>
+</html>

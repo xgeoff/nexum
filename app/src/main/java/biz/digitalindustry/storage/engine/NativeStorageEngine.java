@@ -5,6 +5,7 @@ import biz.digitalindustry.storage.api.StorageConfig;
 import biz.digitalindustry.storage.api.StorageEngine;
 import biz.digitalindustry.storage.codec.RecordCodec;
 import biz.digitalindustry.storage.codec.StorageSnapshotCodec;
+import biz.digitalindustry.storage.index.OrderedRangeIndex;
 import biz.digitalindustry.storage.log.WriteAheadLog;
 import biz.digitalindustry.storage.model.BooleanValue;
 import biz.digitalindustry.storage.model.DoubleValue;
@@ -18,8 +19,12 @@ import biz.digitalindustry.storage.page.PageFile;
 import biz.digitalindustry.storage.schema.InMemorySchemaRegistry;
 import biz.digitalindustry.storage.schema.SchemaRegistry;
 import biz.digitalindustry.storage.schema.EntityType;
+import biz.digitalindustry.storage.store.InMemoryRecordStore;
+import biz.digitalindustry.storage.store.ManagedRecordStore;
+import biz.digitalindustry.storage.store.OverlayRecordStore;
 import biz.digitalindustry.storage.store.PageBackedRecordStore;
 import biz.digitalindustry.storage.store.RecordStore;
+import biz.digitalindustry.storage.store.SnapshotRecordStore;
 import biz.digitalindustry.storage.tx.Transaction;
 import biz.digitalindustry.storage.tx.TransactionMode;
 
@@ -56,18 +61,25 @@ public class NativeStorageEngine implements StorageEngine {
     private NativeIndexStore indexStore;
     private WriteAheadLog writeAheadLog;
     private InMemorySchemaRegistry schemaRegistry;
-    private PageBackedRecordStore recordStore;
+    private ManagedRecordStore recordStore;
     private ExactMatchIndexManager indexManager;
     private OrderedRangeIndexManager orderedIndexManager;
     private Object root;
-    private NativeStorageState txSnapshot;
-    private byte[] txIndexSnapshot;
-    private OrderedRangeIndexManager txOrderedIndexSnapshot;
+    private Object txRootSnapshot;
+    private Map<String, EntityType> txSchemaSnapshot;
+    private Long txNextIdSnapshot;
     private boolean replayingWal;
     private long nextBatchId = 1L;
     private Long currentBatchId;
+    private int activeReaders;
     private long lastAppliedBatchId;
+    private long latestCommittedBatchId;
+    private boolean indexSidecarCurrent;
+    private boolean checkpointRequested;
+    private WriterContext writerContext;
+    private CommittedState committedState;
     private final List<IndexWalOperation> pendingIndexOperations = new ArrayList<>();
+    private final List<RecordRollbackOperation> pendingRecordRollbacks = new ArrayList<>();
     private final Set<String> pendingExactNamespaceOps = new LinkedHashSet<>();
     private final Set<String> pendingOrderedNamespaceOps = new LinkedHashSet<>();
 
@@ -76,50 +88,69 @@ public class NativeStorageEngine implements StorageEngine {
         close();
         this.config = config;
         int pageSize = Math.toIntExact(config.pagePoolSize() > 0 ? config.pagePoolSize() : 8192L);
-        Path dbPath = Path.of(config.path());
-        pageFile = new PageFile(dbPath, pageSize);
-        indexStore = new NativeIndexStore(Path.of(config.path() + ".indexes"), pageSize);
-        writeAheadLog = new WriteAheadLog(Path.of(config.path() + ".wal"));
-        try {
-            pageFile.open();
-            indexStore.open();
-            writeAheadLog.open();
-        } catch (IOException e) {
-            close();
-            throw new RuntimeException("Failed to open native storage engine at " + config.path(), e);
+        if (!config.memoryOnly()) {
+            Path dbPath = Path.of(config.path());
+            pageFile = new PageFile(dbPath, pageSize);
+            indexStore = new NativeIndexStore(Path.of(config.path() + ".indexes"), pageSize);
+            writeAheadLog = new WriteAheadLog(Path.of(config.path() + ".wal"));
+            try {
+                pageFile.open();
+                indexStore.open();
+                writeAheadLog.open();
+            } catch (IOException e) {
+                close();
+                throw new RuntimeException("Failed to open native storage engine at " + config.path(), e);
+            }
         }
-        NativeStorageState metadata = StorageSnapshotCodec.decode(readPagePayload());
+        NativeStorageState metadata = config.memoryOnly()
+                ? new NativeStorageState(null, Map.of(), Map.of(), 1L, 0L)
+                : StorageSnapshotCodec.decode(readPagePayload());
         root = metadata.root();
         schemaRegistry = new InMemorySchemaRegistry(metadata.entityTypes());
         lastAppliedBatchId = metadata.lastAppliedBatchId();
+        latestCommittedBatchId = lastAppliedBatchId;
         indexManager = new ExactMatchIndexManager();
         orderedIndexManager = new OrderedRangeIndexManager();
-        try {
-            indexStore.loadInto(indexManager, orderedIndexManager);
-        } catch (RuntimeException e) {
-            indexManager.clear();
-            orderedIndexManager.clear();
+        if (indexStore != null) {
+            try {
+                indexStore.loadInto(indexManager, orderedIndexManager);
+            } catch (RuntimeException e) {
+                indexManager.clear();
+                orderedIndexManager.clear();
+            }
         }
-        recordStore = new PageBackedRecordStore(
-                Path.of(config.path() + ".records"),
-                pageSize,
-                this::resolveEntityType,
-                null
-        );
+        recordStore = config.memoryOnly()
+                ? new InMemoryRecordStore(this::recordRollbackOperation)
+                : new PageBackedRecordStore(
+                        Path.of(config.path() + ".records"),
+                        pageSize,
+                        this::resolveEntityType,
+                        this::recordRollbackOperation
+                );
         recordStore.open();
-        replayWriteAheadLog();
-        txSnapshot = null;
-        txIndexSnapshot = null;
-        txOrderedIndexSnapshot = null;
+        if (writeAheadLog != null) {
+            replayWriteAheadLog();
+        }
+        txRootSnapshot = null;
+        txSchemaSnapshot = null;
+        txNextIdSnapshot = null;
         pendingIndexOperations.clear();
+        pendingRecordRollbacks.clear();
         pendingExactNamespaceOps.clear();
         pendingOrderedNamespaceOps.clear();
         replayingWal = false;
         currentBatchId = null;
+        indexSidecarCurrent = true;
+        checkpointRequested = !config.memoryOnly() && walSizeBytes() > config.maxWalBytes();
+        writerContext = null;
+        committedState = snapshotCommittedState();
     }
 
     @Override
     public synchronized boolean isOpen() {
+        if (config != null && config.memoryOnly()) {
+            return schemaRegistry != null && recordStore != null;
+        }
         return pageFile != null && pageFile.isOpen()
                 && indexStore != null && indexStore.isOpen()
                 && writeAheadLog != null && writeAheadLog.isOpen();
@@ -134,16 +165,28 @@ public class NativeStorageEngine implements StorageEngine {
     @Override
     public synchronized Transaction begin(TransactionMode mode) {
         ensureOpen();
-        if (txSnapshot != null) {
-            throw new IllegalStateException("Native storage engine already has an active transaction");
+        if (mode == TransactionMode.READ_ONLY) {
+            activeReaders++;
+            return new NativeReadOnlyTransaction();
         }
-        txSnapshot = currentState();
-        txIndexSnapshot = indexManager.encode();
-        txOrderedIndexSnapshot = orderedIndexManager.copy();
+        if (currentBatchId != null) {
+            throw new IllegalStateException("Native storage engine already has an active writer");
+        }
+        txRootSnapshot = root;
+        txSchemaSnapshot = schemaRegistry.snapshot();
+        txNextIdSnapshot = recordStore.nextId();
         currentBatchId = nextBatchId++;
+        writerContext = new WriterContext(
+                Thread.currentThread(),
+                root,
+                new InMemorySchemaRegistry(txSchemaSnapshot),
+                new OverlayRecordStore(recordStore, txNextIdSnapshot)
+        );
         pendingIndexOperations.clear();
+        pendingRecordRollbacks.clear();
         pendingExactNamespaceOps.clear();
         pendingOrderedNamespaceOps.clear();
+        indexSidecarCurrent = false;
         recordStore.setAutoFlush(false);
         appendBatchEntry(WriteAheadLog.BEGIN, currentBatchId, mode.name().getBytes(StandardCharsets.UTF_8));
         return new NativeTransaction(mode);
@@ -151,12 +194,20 @@ public class NativeStorageEngine implements StorageEngine {
 
     public synchronized SchemaRegistry schemaRegistry() {
         ensureOpen();
-        return schemaRegistry;
+        WriterContext context = currentWriterContext();
+        if (context != null) {
+            return context.schemaRegistry();
+        }
+        return currentBatchId != null ? committedState.schemaRegistry() : schemaRegistry;
     }
 
     public synchronized RecordStore recordStore() {
         ensureOpen();
-        return recordStore;
+        WriterContext context = currentWriterContext();
+        if (context != null) {
+            return context.recordStore();
+        }
+        return currentBatchId != null ? committedState.recordStore() : recordStore;
     }
 
     public synchronized PageFile pageFile() {
@@ -175,28 +226,109 @@ public class NativeStorageEngine implements StorageEngine {
 
     public synchronized ExactMatchIndexManager indexManager() {
         ensureOpen();
+        if (!config.memoryOnly()) {
+            indexSidecarCurrent = false;
+        }
         return indexManager;
     }
 
     public synchronized OrderedRangeIndexManager orderedIndexManager() {
         ensureOpen();
+        if (!config.memoryOnly()) {
+            indexSidecarCurrent = false;
+        }
         return orderedIndexManager;
     }
 
     public synchronized Set<Object> exactIndexFind(String namespace, String fieldName, FieldValue value) {
         ensureOpen();
-        if (txSnapshot != null) {
-            return indexManager.find(namespace, fieldName, value);
+        Set<Object> committed = currentBatchId != null
+                ? committedState.exactIndexes().find(namespace, fieldName, value)
+                : indexManager.find(namespace, fieldName, value);
+        WriterContext context = currentWriterContext();
+        if (context == null) {
+            return committed;
         }
-        return indexStore.findExact((byte) 1, namespace, fieldName, value);
+        LinkedHashSet<Object> merged = new LinkedHashSet<>(committed);
+        for (IndexWalOperation operation : pendingIndexOperations) {
+            if (!namespace.equals(operation.namespace())) {
+                continue;
+            }
+            switch (operation.kind()) {
+                case EXACT_ADD -> {
+                    FieldValue candidate = operation.fieldValues().get(fieldName);
+                    if (value.equals(candidate)) {
+                        merged.add(operation.identifier());
+                    }
+                }
+                case EXACT_REMOVE -> {
+                    FieldValue candidate = operation.fieldValues().get(fieldName);
+                    if (value.equals(candidate)) {
+                        merged.remove(operation.identifier());
+                    }
+                }
+                default -> {
+                }
+            }
+        }
+        return Set.copyOf(merged);
     }
 
     public synchronized Set<Object> orderedIndexRange(String namespace, String fieldName, FieldValue fromInclusive, FieldValue toInclusive) {
         ensureOpen();
-        if (txSnapshot != null) {
-            return orderedIndexManager.range(namespace, fieldName, fromInclusive, toInclusive);
+        Set<Object> committed = currentBatchId != null
+                ? committedState.orderedIndexes().range(namespace, fieldName, fromInclusive, toInclusive)
+                : orderedIndexManager.range(namespace, fieldName, fromInclusive, toInclusive);
+        WriterContext context = currentWriterContext();
+        if (context == null) {
+            return committed;
         }
-        return indexStore.findRange(namespace, fieldName, fromInclusive, toInclusive);
+        LinkedHashSet<Object> merged = new LinkedHashSet<>(committed);
+        for (IndexWalOperation operation : pendingIndexOperations) {
+            if (!namespace.equals(operation.namespace()) || !fieldName.equals(operation.fieldName()) || operation.fieldValue() == null) {
+                continue;
+            }
+            int lower = OrderedRangeIndex.compare(operation.fieldValue(), fromInclusive);
+            int upper = OrderedRangeIndex.compare(operation.fieldValue(), toInclusive);
+            if (lower >= 0 && upper <= 0) {
+                if (operation.kind() == IndexWalKind.ORDERED_ADD) {
+                    merged.add(operation.identifier());
+                } else if (operation.kind() == IndexWalKind.ORDERED_REMOVE) {
+                    merged.remove(operation.identifier());
+                }
+            }
+        }
+        return Set.copyOf(merged);
+    }
+
+    @Override
+    public synchronized long walSizeBytes() {
+        ensureOpen();
+        if (writeAheadLog == null) {
+            return 0L;
+        }
+        return writeAheadLog.sizeBytes();
+    }
+
+    @Override
+    public synchronized boolean needsCheckpoint() {
+        ensureOpen();
+        return !config.memoryOnly() && checkpointRequested;
+    }
+
+    @Override
+    public synchronized void checkpoint() {
+        ensureOpen();
+        if (config.memoryOnly()) {
+            checkpointRequested = false;
+            return;
+        }
+        if (currentBatchId != null || activeReaders > 0) {
+            throw new IllegalStateException("Cannot checkpoint with an active transaction");
+        }
+        recordStore.setAutoFlush(true);
+        recordStore.flush();
+        persistState(true);
     }
 
     public synchronized <I> void ensureExactMatchNamespace(
@@ -206,6 +338,10 @@ public class NativeStorageEngine implements StorageEngine {
             Function<Record, I> identifierExtractor
     ) {
         ensureOpen();
+        if (currentWriterContext() != null) {
+            recordExactNamespaceOperation(namespace, indexedFields);
+            return;
+        }
         if (indexManager.ensureNamespace(namespace, indexedFields)) {
             return;
         }
@@ -225,6 +361,10 @@ public class NativeStorageEngine implements StorageEngine {
             Function<Record, I> identifierExtractor
     ) {
         ensureOpen();
+        if (currentWriterContext() != null) {
+            recordOrderedNamespaceOperation(namespace, indexedFields);
+            return;
+        }
         if (orderedIndexManager.ensureNamespace(namespace, indexedFields)) {
             return;
         }
@@ -246,13 +386,18 @@ public class NativeStorageEngine implements StorageEngine {
             Object identifier
     ) {
         ensureOpen();
+        if (currentWriterContext() != null && currentBatchId != null && !replayingWal) {
+            recordExactNamespaceOperation(namespace, indexedFields);
+            pendingIndexOperations.add(IndexWalOperation.exactAdd(namespace, List.copyOf(indexedFields), fieldValues, identifier));
+            return;
+        }
         if (!indexManager.ensureNamespace(namespace, indexedFields)) {
             recordExactNamespaceOperation(namespace, indexedFields);
+        } else if (!replayingWal && indexStore != null) {
+            // namespace already exists; nothing to persist here
         }
         indexManager.add(namespace, fieldValues, identifier);
-        if (txSnapshot != null && !replayingWal) {
-            pendingIndexOperations.add(IndexWalOperation.exactAdd(namespace, fieldValues, identifier));
-        } else if (!replayingWal && indexStore != null) {
+        if (!replayingWal && indexStore != null) {
             try {
                 for (String field : indexedFields) {
                     FieldValue value = fieldValues.get(field);
@@ -273,13 +418,18 @@ public class NativeStorageEngine implements StorageEngine {
             Object identifier
     ) {
         ensureOpen();
+        if (currentWriterContext() != null && currentBatchId != null && !replayingWal) {
+            recordExactNamespaceOperation(namespace, indexedFields);
+            pendingIndexOperations.add(IndexWalOperation.exactRemove(namespace, List.copyOf(indexedFields), fieldValues, identifier));
+            return;
+        }
         if (!indexManager.ensureNamespace(namespace, indexedFields)) {
             recordExactNamespaceOperation(namespace, indexedFields);
+        } else if (!replayingWal && indexStore != null) {
+            // namespace already exists; nothing to persist here
         }
         indexManager.remove(namespace, fieldValues, identifier);
-        if (txSnapshot != null && !replayingWal) {
-            pendingIndexOperations.add(IndexWalOperation.exactRemove(namespace, fieldValues, identifier));
-        } else if (!replayingWal && indexStore != null) {
+        if (!replayingWal && indexStore != null) {
             try {
                 for (String field : indexedFields) {
                     FieldValue value = fieldValues.get(field);
@@ -301,13 +451,18 @@ public class NativeStorageEngine implements StorageEngine {
             Object identifier
     ) {
         ensureOpen();
+        if (currentWriterContext() != null && currentBatchId != null && !replayingWal) {
+            recordOrderedNamespaceOperation(namespace, indexedFields);
+            pendingIndexOperations.add(IndexWalOperation.orderedAdd(namespace, fieldName, value, identifier));
+            return;
+        }
         if (!orderedIndexManager.ensureNamespace(namespace, indexedFields)) {
             recordOrderedNamespaceOperation(namespace, indexedFields);
+        } else if (!replayingWal && indexStore != null) {
+            // namespace already exists; nothing to persist here
         }
         orderedIndexManager.add(namespace, fieldName, value, identifier);
-        if (txSnapshot != null && !replayingWal) {
-            pendingIndexOperations.add(IndexWalOperation.orderedAdd(namespace, fieldName, value, identifier));
-        } else if (!replayingWal && indexStore != null) {
+        if (!replayingWal && indexStore != null) {
             try {
                 indexStore.applyOrderedAdd(namespace, fieldName, value, identifier);
             } catch (IOException e) {
@@ -324,13 +479,18 @@ public class NativeStorageEngine implements StorageEngine {
             Object identifier
     ) {
         ensureOpen();
+        if (currentWriterContext() != null && currentBatchId != null && !replayingWal) {
+            recordOrderedNamespaceOperation(namespace, indexedFields);
+            pendingIndexOperations.add(IndexWalOperation.orderedRemove(namespace, fieldName, value, identifier));
+            return;
+        }
         if (!orderedIndexManager.ensureNamespace(namespace, indexedFields)) {
             recordOrderedNamespaceOperation(namespace, indexedFields);
+        } else if (!replayingWal && indexStore != null) {
+            // namespace already exists; nothing to persist here
         }
         orderedIndexManager.remove(namespace, fieldName, value, identifier);
-        if (txSnapshot != null && !replayingWal) {
-            pendingIndexOperations.add(IndexWalOperation.orderedRemove(namespace, fieldName, value, identifier));
-        } else if (!replayingWal && indexStore != null) {
+        if (!replayingWal && indexStore != null) {
             try {
                 indexStore.applyOrderedRemove(namespace, fieldName, value, identifier);
             } catch (IOException e) {
@@ -342,21 +502,16 @@ public class NativeStorageEngine implements StorageEngine {
     @Override
     public synchronized void close() {
         if (isOpen()) {
-            if (txSnapshot != null) {
-                restoreState(txSnapshot);
-                txSnapshot = null;
-                if (txIndexSnapshot != null && indexManager != null) {
-                    indexManager.decode(txIndexSnapshot);
-                    txIndexSnapshot = null;
-                }
-                if (txOrderedIndexSnapshot != null) {
-                    orderedIndexManager = txOrderedIndexSnapshot;
-                    txOrderedIndexSnapshot = null;
-                }
+            if (currentBatchId != null) {
+                rollbackPendingIndexState();
+                writerContext = null;
             }
-            recordStore.setAutoFlush(true);
-            recordStore.flush();
-            persistState();
+            if (config.checkpointOnClose()) {
+                checkpoint();
+            } else {
+                recordStore.setAutoFlush(true);
+                recordStore.flush();
+            }
         }
         if (recordStore != null) {
             try {
@@ -404,15 +559,22 @@ public class NativeStorageEngine implements StorageEngine {
         }
         orderedIndexManager = null;
         root = null;
-        txSnapshot = null;
-        txIndexSnapshot = null;
-        txOrderedIndexSnapshot = null;
+        txRootSnapshot = null;
+        txSchemaSnapshot = null;
+        txNextIdSnapshot = null;
         pendingIndexOperations.clear();
+        pendingRecordRollbacks.clear();
         pendingExactNamespaceOps.clear();
         pendingOrderedNamespaceOps.clear();
         config = null;
         currentBatchId = null;
+        activeReaders = 0;
         lastAppliedBatchId = 0L;
+        latestCommittedBatchId = 0L;
+        indexSidecarCurrent = false;
+        checkpointRequested = false;
+        writerContext = null;
+        committedState = null;
     }
 
     private void ensureOpen() {
@@ -421,7 +583,55 @@ public class NativeStorageEngine implements StorageEngine {
         }
     }
 
+    private WriterContext currentWriterContext() {
+        if (writerContext == null) {
+            return null;
+        }
+        return writerContext.ownerThread() == Thread.currentThread() ? writerContext : null;
+    }
+
+    private Object currentRootValue() {
+        WriterContext context = currentWriterContext();
+        if (context != null) {
+            return context.root();
+        }
+        return currentBatchId != null ? committedState.root() : root;
+    }
+
+    private void setCurrentRootValue(Object updatedRoot) {
+        WriterContext context = currentWriterContext();
+        if (context != null) {
+            context.setRoot(updatedRoot);
+        } else {
+            root = updatedRoot;
+            committedState = snapshotCommittedState();
+        }
+    }
+
+    private Map<String, EntityType> currentSchemaSnapshot() {
+        WriterContext context = currentWriterContext();
+        return context != null ? context.schemaRegistry().snapshot() : schemaRegistry.snapshot();
+    }
+
+    private long currentNextIdValue() {
+        WriterContext context = currentWriterContext();
+        return context != null ? context.recordStore().nextId() : recordStore.nextId();
+    }
+
+    private CommittedState snapshotCommittedState() {
+        return new CommittedState(
+                root,
+                new InMemorySchemaRegistry(schemaRegistry.snapshot()),
+                indexManager.copy(),
+                orderedIndexManager.copy(),
+                new SnapshotRecordStore(recordStore.snapshot())
+        );
+    }
+
     private byte[] readPagePayload() {
+        if (pageFile == null) {
+            return new byte[0];
+        }
         try {
             return pageFile.readPayload();
         } catch (IOException e) {
@@ -430,14 +640,36 @@ public class NativeStorageEngine implements StorageEngine {
     }
 
     private void persistState() {
+        persistState(true);
+    }
+
+    private void persistState(boolean rewriteIndexSidecar) {
+        if (config != null && config.memoryOnly()) {
+            checkpointRequested = false;
+            indexSidecarCurrent = true;
+            return;
+        }
         try {
-            NativeStorageState metadataState = new NativeStorageState(root, schemaRegistry.snapshot(), java.util.Map.of(), recordStore.nextId(), lastAppliedBatchId);
-            pageFile.writePayload(StorageSnapshotCodec.encode(metadataState));
-            persistIndexState();
+            lastAppliedBatchId = latestCommittedBatchId;
+            persistMetadataState();
+            if (rewriteIndexSidecar) {
+                persistIndexState();
+            }
             writeAheadLog.clear();
+            indexSidecarCurrent = true;
+            checkpointRequested = false;
+            committedState = snapshotCommittedState();
         } catch (IOException e) {
             throw new RuntimeException("Failed to persist native storage state", e);
         }
+    }
+
+    private void persistMetadataState() throws IOException {
+        if (pageFile == null) {
+            return;
+        }
+        NativeStorageState metadataState = new NativeStorageState(root, schemaRegistry.snapshot(), java.util.Map.of(), recordStore.nextId(), lastAppliedBatchId);
+        pageFile.writePayload(StorageSnapshotCodec.encode(metadataState));
     }
 
     private void persistIndexState() throws IOException {
@@ -447,44 +679,71 @@ public class NativeStorageEngine implements StorageEngine {
     }
 
     private void recordExactNamespaceOperation(String namespace, Collection<String> indexedFields) {
-        if (txSnapshot != null && !replayingWal && pendingExactNamespaceOps.add(namespace)) {
+        if (currentBatchId != null && !replayingWal && pendingExactNamespaceOps.add(namespace)) {
             pendingIndexOperations.add(IndexWalOperation.exactNamespace(namespace, List.copyOf(indexedFields)));
         }
     }
 
     private void recordOrderedNamespaceOperation(String namespace, Collection<String> indexedFields) {
-        if (txSnapshot != null && !replayingWal && pendingOrderedNamespaceOps.add(namespace)) {
+        if (currentBatchId != null && !replayingWal && pendingOrderedNamespaceOps.add(namespace)) {
             pendingIndexOperations.add(IndexWalOperation.orderedNamespace(namespace, List.copyOf(indexedFields)));
         }
     }
 
-    private NativeStorageState currentState() {
-        return new NativeStorageState(
-                root,
-                schemaRegistry.snapshot(),
-                recordStore.snapshot(),
-                recordStore.nextId(),
-                lastAppliedBatchId
-        );
+    private void recordRollbackOperation(byte operationType, Record beforeRecord, Record afterRecord, RecordId recordId) {
+        if (currentBatchId == null || replayingWal) {
+            return;
+        }
+        pendingRecordRollbacks.add(RecordRollbackOperation.from(operationType, beforeRecord, afterRecord, recordId));
     }
 
-    private void restoreState(NativeStorageState state) {
-        root = state.root();
-        schemaRegistry = new InMemorySchemaRegistry(state.entityTypes());
-        lastAppliedBatchId = state.lastAppliedBatchId();
-        if (recordStore != null) {
-            recordStore.replaceWithSnapshot(state.records(), state.nextId());
+    private void rollbackActiveTransaction() {
+        replayingWal = true;
+        try {
+            recordStore.setAutoFlush(false);
+            for (int i = pendingRecordRollbacks.size() - 1; i >= 0; i--) {
+                pendingRecordRollbacks.get(i).rollback(recordStore);
+            }
+            if (txNextIdSnapshot != null) {
+                recordStore.setNextId(txNextIdSnapshot);
+            }
+            recordStore.setAutoFlush(true);
+            recordStore.flush();
+            root = txRootSnapshot;
+            schemaRegistry = new InMemorySchemaRegistry(txSchemaSnapshot == null ? Map.of() : txSchemaSnapshot);
+        } finally {
+            if (recordStore != null) {
+                recordStore.setAutoFlush(true);
+            }
+            replayingWal = false;
         }
     }
 
+    private void rollbackPendingIndexState() {
+        indexSidecarCurrent = true;
+    }
+
     private EntityType resolveEntityType(String name) {
-        EntityType entityType = schemaRegistry.entityType(name);
+        EntityType entityType = schemaRegistry().entityType(name);
         return entityType != null ? entityType : new EntityType(name, List.of(), List.of());
     }
 
     synchronized void writeCommittedStateToWalForTest() {
         long batchId = requireCurrentBatchId();
+        WriterContext context = currentWriterContext();
+        if (context != null) {
+            applyWriterOverlayToCommittedStore(context, false);
+        }
         appendBatchEntry(WriteAheadLog.METADATA, batchId, encodeMetadataCheckpoint());
+        if (context != null) {
+            for (OverlayRecordStore.RecordMutation mutation : context.recordStore().mutations()) {
+                if (mutation.operationType() == WriteAheadLog.UPSERT) {
+                    appendBatchEntry(WriteAheadLog.UPSERT, batchId, RecordCodec.encode(mutation.record()));
+                } else if (mutation.operationType() == WriteAheadLog.DELETE) {
+                    appendBatchEntry(WriteAheadLog.DELETE, batchId, encodeDelete(mutation.recordId()));
+                }
+            }
+        }
         appendIndexWalEntries(batchId);
         appendBatchEntry(WriteAheadLog.RECORD_PAGE_COUNT, batchId, encodePageCount(recordStore.currentPageCount()));
         appendBatchEntry(WriteAheadLog.RECORD_SLOT_INDEX, batchId, recordStore.encodedRecordSlotIndex());
@@ -497,7 +756,25 @@ public class NativeStorageEngine implements StorageEngine {
 
     synchronized void writeCommittedStateWithMixedForeignDiffForTest() {
         long batchId = requireCurrentBatchId();
+        WriterContext context = currentWriterContext();
+        if (context != null) {
+            applyWriterOverlayToCommittedStore(context, false);
+        }
         appendBatchEntry(WriteAheadLog.METADATA, batchId, encodeMetadataCheckpoint());
+        if (context != null) {
+            boolean insertedForeign = false;
+            for (OverlayRecordStore.RecordMutation mutation : context.recordStore().mutations()) {
+                byte type = mutation.operationType();
+                byte[] payload = type == WriteAheadLog.UPSERT
+                        ? RecordCodec.encode(mutation.record())
+                        : encodeDelete(mutation.recordId());
+                if (!insertedForeign) {
+                    appendBatchEntry(type, batchId + 1000, payload);
+                    insertedForeign = true;
+                }
+                appendBatchEntry(type, batchId, payload);
+            }
+        }
         appendIndexWalEntries(batchId);
         appendBatchEntry(WriteAheadLog.RECORD_PAGE_COUNT, batchId, encodePageCount(recordStore.currentPageCount()));
         appendBatchEntry(WriteAheadLog.RECORD_SLOT_INDEX, batchId, recordStore.encodedRecordSlotIndex());
@@ -515,19 +792,34 @@ public class NativeStorageEngine implements StorageEngine {
 
     synchronized void persistCheckpointWithoutClearingWalForTest() {
         long batchId = requireCurrentBatchId();
+        WriterContext context = currentWriterContext();
+        if (context != null) {
+            applyWriterOverlayToCommittedStore(context);
+            root = context.root();
+            schemaRegistry = new InMemorySchemaRegistry(context.schemaRegistry().snapshot());
+        }
         recordStore.setAutoFlush(true);
         recordStore.flush();
         lastAppliedBatchId = batchId;
+        latestCommittedBatchId = batchId;
         NativeStorageState metadataState = new NativeStorageState(root, schemaRegistry.snapshot(), java.util.Map.of(), recordStore.nextId(), lastAppliedBatchId);
         try {
             pageFile.writePayload(StorageSnapshotCodec.encode(metadataState));
             persistIndexState();
+            indexSidecarCurrent = true;
+            committedState = snapshotCommittedState();
         } catch (IOException e) {
             throw new RuntimeException("Failed to persist checkpoint without clearing WAL", e);
         }
     }
 
     synchronized void flushRecordStoreWithoutEngineCheckpointForTest() {
+        WriterContext context = currentWriterContext();
+        if (context != null) {
+            applyWriterOverlayToCommittedStore(context);
+            root = context.root();
+            schemaRegistry = new InMemorySchemaRegistry(context.schemaRegistry().snapshot());
+        }
         recordStore.setAutoFlush(true);
         recordStore.flush();
     }
@@ -559,16 +851,21 @@ public class NativeStorageEngine implements StorageEngine {
             orderedIndexManager = null;
         }
         root = null;
-        txSnapshot = null;
-        txIndexSnapshot = null;
-        txOrderedIndexSnapshot = null;
+        txRootSnapshot = null;
+        txSchemaSnapshot = null;
+        txNextIdSnapshot = null;
         pendingIndexOperations.clear();
+        pendingRecordRollbacks.clear();
         pendingExactNamespaceOps.clear();
         pendingOrderedNamespaceOps.clear();
         config = null;
         replayingWal = false;
         currentBatchId = null;
+        activeReaders = 0;
         lastAppliedBatchId = 0L;
+        latestCommittedBatchId = 0L;
+        indexSidecarCurrent = false;
+        checkpointRequested = false;
     }
 
     synchronized void corruptLastWalDiffByteForTest() throws IOException {
@@ -600,7 +897,7 @@ public class NativeStorageEngine implements StorageEngine {
     }
 
     private byte[] encodeMetadataCheckpoint() {
-        NativeStorageState metadataState = new NativeStorageState(root, schemaRegistry.snapshot(), java.util.Map.of(), recordStore.nextId(), lastAppliedBatchId);
+        NativeStorageState metadataState = new NativeStorageState(currentRootValue(), currentSchemaSnapshot(), java.util.Map.of(), currentNextIdValue(), lastAppliedBatchId);
         return StorageSnapshotCodec.encode(metadataState);
     }
 
@@ -613,6 +910,9 @@ public class NativeStorageEngine implements StorageEngine {
     }
 
     private void appendBatchEntry(byte type, long batchId, byte[] payload) {
+        if (writeAheadLog == null) {
+            return;
+        }
         writeAheadLog.append(type, encodeBatchPayload(batchId, payload));
     }
 
@@ -739,6 +1039,7 @@ public class NativeStorageEngine implements StorageEngine {
                         }
                         applyRecoveredIndexState(committedIndexOperations);
                         if (activeBatchId != null) {
+                            latestCommittedBatchId = activeBatchId;
                             lastAppliedBatchId = activeBatchId;
                         }
                         replayed = true;
@@ -773,11 +1074,19 @@ public class NativeStorageEngine implements StorageEngine {
 
         if (replayed) {
             persistState();
+        } else if (isOpen()) {
+            checkpointRequested = walSizeBytes() > config.maxWalBytes();
         }
     }
 
     private void applyRecoveredIndexState(List<IndexWalOperation> committedIndexOperations) {
         for (IndexWalOperation operation : committedIndexOperations) {
+            applyIndexWalOperation(operation);
+        }
+    }
+
+    private void applyPendingIndexOperationsToCommittedState() {
+        for (IndexWalOperation operation : pendingIndexOperations) {
             applyIndexWalOperation(operation);
         }
     }
@@ -827,15 +1136,49 @@ public class NativeStorageEngine implements StorageEngine {
         return ByteBuffer.allocate(Integer.BYTES).putInt(pageCount).array();
     }
 
+    private void applyWriterOverlayToCommittedStore(WriterContext context) {
+        applyWriterOverlayToCommittedStore(context, true);
+    }
+
+    private void applyWriterOverlayToCommittedStore(WriterContext context, boolean flush) {
+        replayingWal = true;
+        try {
+            recordStore.setAutoFlush(false);
+            for (OverlayRecordStore.RecordMutation mutation : context.recordStore().mutations()) {
+                if (mutation.operationType() == WriteAheadLog.UPSERT) {
+                    recordStore.recoverUpsert(mutation.record());
+                } else if (mutation.operationType() == WriteAheadLog.DELETE) {
+                    recordStore.recoverDelete(mutation.recordId());
+                }
+            }
+            recordStore.setNextId(context.recordStore().nextId());
+            if (flush) {
+                recordStore.setAutoFlush(true);
+                recordStore.flush();
+            }
+        } finally {
+            replayingWal = false;
+            if (flush) {
+                recordStore.setAutoFlush(true);
+            } else {
+                recordStore.setAutoFlush(false);
+            }
+        }
+    }
+
     private void applyIndexWalOperation(IndexWalOperation operation) {
         switch (operation.kind()) {
             case EXACT_NAMESPACE -> indexManager.ensureNamespace(operation.namespace(), operation.indexedFields());
             case EXACT_ADD -> {
-                indexManager.ensureNamespace(operation.namespace(), operation.fieldValues().keySet());
+                if (!indexManager.namespaces().contains(operation.namespace())) {
+                    indexManager.ensureNamespace(operation.namespace(), operation.indexedFields());
+                }
                 indexManager.add(operation.namespace(), operation.fieldValues(), operation.identifier());
             }
             case EXACT_REMOVE -> {
-                indexManager.ensureNamespace(operation.namespace(), operation.fieldValues().keySet());
+                if (!indexManager.namespaces().contains(operation.namespace())) {
+                    indexManager.ensureNamespace(operation.namespace(), operation.indexedFields());
+                }
                 indexManager.remove(operation.namespace(), operation.fieldValues(), operation.identifier());
             }
             case ORDERED_NAMESPACE -> orderedIndexManager.ensureNamespace(operation.namespace(), operation.indexedFields());
@@ -1046,11 +1389,19 @@ public class NativeStorageEngine implements StorageEngine {
         }
 
         static IndexWalOperation exactAdd(String namespace, Map<String, FieldValue> fieldValues, Object identifier) {
-            return new IndexWalOperation(IndexWalKind.EXACT_ADD, namespace, List.copyOf(fieldValues.keySet()), new LinkedHashMap<>(fieldValues), null, null, identifier);
+            return exactAdd(namespace, List.copyOf(fieldValues.keySet()), fieldValues, identifier);
+        }
+
+        static IndexWalOperation exactAdd(String namespace, List<String> indexedFields, Map<String, FieldValue> fieldValues, Object identifier) {
+            return new IndexWalOperation(IndexWalKind.EXACT_ADD, namespace, indexedFields, new LinkedHashMap<>(fieldValues), null, null, identifier);
         }
 
         static IndexWalOperation exactRemove(String namespace, Map<String, FieldValue> fieldValues, Object identifier) {
-            return new IndexWalOperation(IndexWalKind.EXACT_REMOVE, namespace, List.copyOf(fieldValues.keySet()), new LinkedHashMap<>(fieldValues), null, null, identifier);
+            return exactRemove(namespace, List.copyOf(fieldValues.keySet()), fieldValues, identifier);
+        }
+
+        static IndexWalOperation exactRemove(String namespace, List<String> indexedFields, Map<String, FieldValue> fieldValues, Object identifier) {
+            return new IndexWalOperation(IndexWalKind.EXACT_REMOVE, namespace, indexedFields, new LinkedHashMap<>(fieldValues), null, null, identifier);
         }
 
         static IndexWalOperation orderedNamespace(String namespace, List<String> indexedFields) {
@@ -1094,20 +1445,118 @@ public class NativeStorageEngine implements StorageEngine {
         ORDERED_REMOVE
     }
 
+    private record RecordRollbackOperation(Kind kind, Record record, RecordId recordId) {
+        static RecordRollbackOperation from(byte operationType, Record beforeRecord, Record afterRecord, RecordId recordId) {
+            if (operationType == WriteAheadLog.DELETE) {
+                return new RecordRollbackOperation(Kind.RESTORE, beforeRecord, recordId);
+            }
+            if (beforeRecord == null && afterRecord != null) {
+                return new RecordRollbackOperation(Kind.DELETE, null, recordId);
+            }
+            return new RecordRollbackOperation(Kind.RESTORE, beforeRecord, recordId);
+        }
+
+        void rollback(ManagedRecordStore recordStore) {
+            if (kind == Kind.DELETE) {
+                recordStore.recoverDelete(recordId);
+            } else if (record != null) {
+                recordStore.recoverUpsert(record);
+            }
+        }
+
+        private enum Kind {
+            RESTORE,
+            DELETE
+        }
+    }
+
+    private static final class WriterContext {
+        private final Thread ownerThread;
+        private Object root;
+        private final InMemorySchemaRegistry schemaRegistry;
+        private final OverlayRecordStore recordStore;
+
+        private WriterContext(
+                Thread ownerThread,
+                Object root,
+                InMemorySchemaRegistry schemaRegistry,
+                OverlayRecordStore recordStore
+        ) {
+            this.ownerThread = ownerThread;
+            this.root = root;
+            this.schemaRegistry = schemaRegistry;
+            this.recordStore = recordStore;
+        }
+
+        private Thread ownerThread() {
+            return ownerThread;
+        }
+
+        private Object root() {
+            return root;
+        }
+
+        private void setRoot(Object root) {
+            this.root = root;
+        }
+
+        private InMemorySchemaRegistry schemaRegistry() {
+            return schemaRegistry;
+        }
+
+        private OverlayRecordStore recordStore() {
+            return recordStore;
+        }
+    }
+
+    private record CommittedState(
+            Object root,
+            InMemorySchemaRegistry schemaRegistry,
+            ExactMatchIndexManager exactIndexes,
+            OrderedRangeIndexManager orderedIndexes,
+            SnapshotRecordStore recordStore
+    ) {
+    }
+
     private final class NativeRootHandle implements RootHandle {
         @Override
         public Object get() {
-            return root;
+            return currentRootValue();
         }
 
         @Override
         public <T> T get(Class<T> type) {
-            return type.isInstance(root) ? type.cast(root) : null;
+            Object current = currentRootValue();
+            return type.isInstance(current) ? type.cast(current) : null;
         }
 
         @Override
         public void set(Object root) {
-            NativeStorageEngine.this.root = root;
+            setCurrentRootValue(root);
+        }
+    }
+
+    private final class NativeReadOnlyTransaction implements Transaction {
+        private boolean active = true;
+
+        @Override
+        public void commit() {
+            close();
+        }
+
+        @Override
+        public void rollback() {
+            close();
+        }
+
+        @Override
+        public void close() {
+            if (active) {
+                synchronized (NativeStorageEngine.this) {
+                    activeReaders--;
+                }
+                active = false;
+            }
         }
     }
 
@@ -1123,26 +1572,41 @@ public class NativeStorageEngine implements StorageEngine {
         public void commit() {
             if (active) {
                 long batchId = requireCurrentBatchId();
-                appendBatchEntry(WriteAheadLog.METADATA, batchId, encodeMetadataCheckpoint());
-                appendIndexWalEntries(batchId);
-                appendBatchEntry(WriteAheadLog.RECORD_PAGE_COUNT, batchId, encodePageCount(recordStore.currentPageCount()));
-                appendBatchEntry(WriteAheadLog.RECORD_SLOT_INDEX, batchId, recordStore.encodedRecordSlotIndex());
-                appendBatchEntry(WriteAheadLog.RECORD_ALLOCATOR_STATE, batchId, recordStore.encodedAllocatorState());
-                for (Map.Entry<Integer, byte[]> entry : recordStore.encodedDirtyPageDiffs().entrySet()) {
-                    appendBatchEntry(WriteAheadLog.RECORD_PAGE_DIFF, batchId, encodePageImage(entry.getKey(), entry.getValue()));
+                WriterContext context = currentWriterContext();
+                if (context == null) {
+                    throw new IllegalStateException("Missing writer context for active transaction");
                 }
+                appendBatchEntry(WriteAheadLog.METADATA, batchId, encodeMetadataCheckpoint());
+                for (OverlayRecordStore.RecordMutation mutation : context.recordStore().mutations()) {
+                    if (mutation.operationType() == WriteAheadLog.UPSERT) {
+                        appendBatchEntry(WriteAheadLog.UPSERT, batchId, RecordCodec.encode(mutation.record()));
+                    } else if (mutation.operationType() == WriteAheadLog.DELETE) {
+                        appendBatchEntry(WriteAheadLog.DELETE, batchId, encodeDelete(mutation.recordId()));
+                    }
+                }
+                appendIndexWalEntries(batchId);
                 appendBatchEntry(WriteAheadLog.COMMIT, batchId, mode.name().getBytes(StandardCharsets.UTF_8));
-                recordStore.setAutoFlush(true);
-                recordStore.flush();
-                lastAppliedBatchId = batchId;
-                persistState();
-                txSnapshot = null;
-                txIndexSnapshot = null;
-                txOrderedIndexSnapshot = null;
+                applyWriterOverlayToCommittedStore(context);
+                root = context.root();
+                schemaRegistry = new InMemorySchemaRegistry(context.schemaRegistry().snapshot());
+                applyPendingIndexOperationsToCommittedState();
+                committedState = snapshotCommittedState();
+                latestCommittedBatchId = batchId;
+                try {
+                    persistMetadataState();
+                    checkpointRequested = writeAheadLog != null && writeAheadLog.sizeBytes() > config.maxWalBytes();
+                } catch (IOException e) {
+                    throw new RuntimeException("Failed to persist committed native storage state", e);
+                }
+                txRootSnapshot = null;
+                txSchemaSnapshot = null;
+                txNextIdSnapshot = null;
                 pendingIndexOperations.clear();
+                pendingRecordRollbacks.clear();
                 pendingExactNamespaceOps.clear();
                 pendingOrderedNamespaceOps.clear();
                 currentBatchId = null;
+                writerContext = null;
                 active = false;
             }
         }
@@ -1151,24 +1615,17 @@ public class NativeStorageEngine implements StorageEngine {
         public void rollback() {
             if (active) {
                 appendBatchEntry(WriteAheadLog.ROLLBACK, requireCurrentBatchId(), mode.name().getBytes(StandardCharsets.UTF_8));
-                if (txSnapshot != null) {
-                    restoreState(txSnapshot);
-                    txSnapshot = null;
-                }
-                if (txIndexSnapshot != null && indexManager != null) {
-                    indexManager.decode(txIndexSnapshot);
-                    txIndexSnapshot = null;
-                }
-                if (txOrderedIndexSnapshot != null) {
-                    orderedIndexManager = txOrderedIndexSnapshot;
-                    txOrderedIndexSnapshot = null;
-                }
+                rollbackPendingIndexState();
+                txRootSnapshot = null;
+                txSchemaSnapshot = null;
+                txNextIdSnapshot = null;
                 pendingIndexOperations.clear();
+                pendingRecordRollbacks.clear();
                 pendingExactNamespaceOps.clear();
                 pendingOrderedNamespaceOps.clear();
-                recordStore.setAutoFlush(true);
-                recordStore.flush();
                 currentBatchId = null;
+                writerContext = null;
+                indexSidecarCurrent = true;
                 active = false;
             }
         }

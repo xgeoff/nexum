@@ -10,3 +10,6 @@ build
 
 # Ignore macOS Finder metadata
 .DS_Store
+
+# Ignore built-in server runtime database files
+server/data/

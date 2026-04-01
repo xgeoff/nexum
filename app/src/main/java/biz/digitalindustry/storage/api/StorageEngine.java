@@ -8,6 +8,14 @@ public interface StorageEngine extends AutoCloseable {
     boolean isOpen();
     RootHandle root();
     Transaction begin(TransactionMode mode);
+    default long walSizeBytes() {
+        return 0L;
+    }
+    default boolean needsCheckpoint() {
+        return false;
+    }
+    default void checkpoint() {
+    }
     @Override
     void close();
 }

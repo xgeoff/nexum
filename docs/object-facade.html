@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Object Facade</title>
+    <meta name="description" content="Typed object persistence over the native record engine using explicit schemas and codecs.">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/normalize.css">
+    <link rel="stylesheet" href="css/skeleton.css">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" type="image/png" href="images/favicon-32.png">
+</head>
+<body class="theme-shell theme-docs">
+<div class="shell">
+    <div class="sidebar">
+    <div class="sidebar__brand">
+        <a class="sidebar__brand-link" href="/">
+            <span class="sidebar__mark"></span>
+            <span>
+                <strong>Nexum</strong>
+                <small>Native database</small>
+            </span>
+        </a>
+    </div>
+    <p class="sidebar__tagline">A modern, high-performance database built around one native storage core.</p>
+    <nav class="sidebar__nav">
+        <p class="sidebar__section-title">Documentation</p>
+        <ul>
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/architecture.html">Architecture</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/concurrency-model.html">Concurrency Model</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/index.html">Overview</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/object-facade.html">Object Facade</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/relational-facade.html">Relational Facade</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/server-query-guide.html">Server Query Guide</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/unified-engine-model.html">Unified Engine Model</a></li>
+
+
+        
+        </ul>
+    </nav>
+</div>
+
+    <main class="page-frame">
+        <section class="hero-panel hero-panel--reference">
+            <p class="eyebrow">API Reference</p>
+            <h1>Object Facade</h1>
+            <p class="hero-copy">The object facade stays explicit: object types are registered intentionally, codecs control persistence shape, and the engine owns identity and indexing underneath.</p>
+            <div class="hero-chip-row">
+                <span class="hero-chip">Persistence Style</span>
+                <span class="hero-chip hero-chip--muted">Explicit codecs, no magic</span>
+            </div>
+        </section>
+        <section class="content-panel prose prose--docs">
+<h1 id="object-facade">Object Facade</h1>
+<p>Status: active native implementation</p>
+<p>This facade provides object-style persistence on top of the native record engine.</p>
+<h2 id="key-types">Key Types</h2>
+<ul>
+<li><a href="../app/src/main/java/biz/digitalindustry/storage/object/api/ObjectStore.java"><code>ObjectStore.java</code></a></li>
+<li><a href="../app/src/main/java/biz/digitalindustry/storage/object/api/ObjectType.java"><code>ObjectType.java</code></a></li>
+<li><a href="../app/src/main/java/biz/digitalindustry/storage/object/api/ObjectCodec.java"><code>ObjectCodec.java</code></a></li>
+<li><a href="../app/src/main/java/biz/digitalindustry/storage/object/api/ObjectStoreContext.java"><code>ObjectStoreContext.java</code></a></li>
+<li><a href="../app/src/main/java/biz/digitalindustry/storage/object/api/StoredObject.java"><code>StoredObject.java</code></a></li>
+<li><a href="../app/src/main/java/biz/digitalindustry/storage/object/engine/NativeObjectStore.java"><code>NativeObjectStore.java</code></a></li>
+</ul>
+<h2 id="design">Design</h2>
+<p>The facade is explicit:</p>
+<ul>
+<li>no persistence inheritance</li>
+<li>no bytecode enhancement</li>
+<li>no runtime schema inference</li>
+</ul>
+<p>Callers register <code>ObjectType&lt;T&gt;</code> definitions and supply an <code>ObjectCodec&lt;T&gt;</code> that maps domain objects to and from stored fields.</p>
+<h2 id="capabilities">Capabilities</h2>
+<p>Current API surface:</p>
+<ul>
+<li>register type</li>
+<li>save by logical key</li>
+<li>get by logical key</li>
+<li>scan all objects of a type</li>
+<li>exact-match lookup by indexed or non-indexed field</li>
+<li>delete by logical key</li>
+<li>typed reference resolution through <code>ReferenceValue</code></li>
+</ul>
+<p>The reserved <code>objectKey</code> field acts as the stable logical identity inside each type namespace.</p>
+<h2 id="example">Example</h2>
+<pre><code class="language-java">try (biz.digitalindustry.storage.object.api.ObjectStore store =
+             new biz.digitalindustry.storage.object.engine.NativeObjectStore("data/object-store.dbs")) {
+    store.registerType(addressType);
+    store.registerType(personType);
+
+    store.save(addressType, new Address("addr-1", "Oakland"));
+    store.save(personType, new Person("person-1", "Ada", new Address("addr-1", "Oakland")));
+
+    StoredObject&lt;Person&gt; loaded = store.get(personType, "person-1");
+    System.out.println(loaded.value().address().city());
+}
+</code></pre>
+<h2 id="indexing">Indexing</h2>
+<p>The object facade uses the shared engine-owned exact-match index path for:</p>
+<ul>
+<li>declared single-field indexes</li>
+<li>the reserved <code>objectKey</code> field</li>
+</ul>
+<p>Those indexes are persisted in the native <code>.indexes</code> sidecar and reused on reopen.</p>
+<h2 id="current-limits">Current Limits</h2>
+<ul>
+<li>no reflective POJO mapping</li>
+<li>no lazy proxy layer</li>
+<li>no query planner beyond exact-match lookup</li>
+<li>no higher-level relation helpers beyond explicit references</li>
+</ul>
+
+        </section>
+    </main>
+</div>
+</body>
+</html>

@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Relational Facade</title>
+    <meta name="description" content="Table-and-row storage over the shared native engine with exact and range lookup on declared indexes.">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/normalize.css">
+    <link rel="stylesheet" href="css/skeleton.css">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" type="image/png" href="images/favicon-32.png">
+</head>
+<body class="theme-shell theme-docs">
+<div class="shell">
+    <div class="sidebar">
+    <div class="sidebar__brand">
+        <a class="sidebar__brand-link" href="/">
+            <span class="sidebar__mark"></span>
+            <span>
+                <strong>Nexum</strong>
+                <small>Native database</small>
+            </span>
+        </a>
+    </div>
+    <p class="sidebar__tagline">A modern, high-performance database built around one native storage core.</p>
+    <nav class="sidebar__nav">
+        <p class="sidebar__section-title">Documentation</p>
+        <ul>
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/architecture.html">Architecture</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/concurrency-model.html">Concurrency Model</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/index.html">Overview</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/object-facade.html">Object Facade</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/relational-facade.html">Relational Facade</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/server-query-guide.html">Server Query Guide</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/unified-engine-model.html">Unified Engine Model</a></li>
+
+
+        
+        </ul>
+    </nav>
+</div>
+
+    <main class="page-frame">
+        <section class="hero-panel hero-panel--reference">
+            <p class="eyebrow">API Reference</p>
+            <h1>Relational Facade</h1>
+            <p class="hero-copy">The relational facade is intentionally narrow and storage-focused, giving tables, rows, and index-backed lookups without pretending to be a full SQL engine.</p>
+            <div class="hero-chip-row">
+                <span class="hero-chip">Relational Scope</span>
+                <span class="hero-chip hero-chip--muted">Table primitives over one engine</span>
+            </div>
+        </section>
+        <section class="content-panel prose prose--docs">
+<h1 id="relational-facade">Relational Facade</h1>
+<p>Status: active native implementation</p>
+<p>This facade provides table-and-row storage on top of the native record engine.</p>
+<h2 id="key-types">Key Types</h2>
+<ul>
+<li><a href="../app/src/main/java/biz/digitalindustry/storage/relational/api/RelationalStore.java"><code>RelationalStore.java</code></a></li>
+<li><a href="../app/src/main/java/biz/digitalindustry/storage/relational/api/TableDefinition.java"><code>TableDefinition.java</code></a></li>
+<li><a href="../app/src/main/java/biz/digitalindustry/storage/relational/api/Row.java"><code>Row.java</code></a></li>
+<li><a href="../app/src/main/java/biz/digitalindustry/storage/relational/engine/NativeRelationalStore.java"><code>NativeRelationalStore.java</code></a></li>
+</ul>
+<h2 id="design">Design</h2>
+<p>The current relational layer is intentionally narrow. It is a storage facade, not a SQL engine.</p>
+<p>It uses:</p>
+<ul>
+<li>explicit <code>TableDefinition</code></li>
+<li>explicit primary-key column selection</li>
+<li>row storage as <code>Map&lt;String, FieldValue&gt;</code></li>
+<li>exact-match lookup</li>
+<li>ordered/range lookup for declared ordered indexes</li>
+</ul>
+<p>Table definitions are now restored from the persisted engine schema on reopen, so a reopened relational store can recover registered tables without manual re-registration.</p>
+<p>Each stored row also carries a reserved internal key, <code>rowKey</code>, derived from the primary-key value.</p>
+<h2 id="capabilities">Capabilities</h2>
+<p>Current API surface:</p>
+<ul>
+<li>register table</li>
+<li>upsert row by primary key</li>
+<li>get row by primary key</li>
+<li>scan all rows</li>
+<li>exact-match lookup by column value</li>
+<li>ordered/range lookup by column value</li>
+<li>delete by primary key</li>
+</ul>
+<h2 id="indexing">Indexing</h2>
+<p>The relational facade uses shared engine-owned indexes for:</p>
+<ul>
+<li>exact-match single-field indexes</li>
+<li>ordered/range single-field indexes</li>
+<li>the reserved <code>rowKey</code> field</li>
+</ul>
+<p>Those indexes are persisted in the native <code>.indexes</code> sidecar and can be queried directly from persisted index pages during non-transactional reads.</p>
+<h2 id="example">Example</h2>
+<pre><code class="language-java">try (biz.digitalindustry.storage.relational.api.RelationalStore store =
+             new biz.digitalindustry.storage.relational.engine.NativeRelationalStore("data/relational.dbs")) {
+    store.registerTable(users);
+
+    store.upsert(users, new Row("u1", Map.of(
+            "id", new StringValue("u1"),
+            "name", new StringValue("Ada"),
+            "age", new LongValue(37)
+    )));
+
+    Row row = store.get(users, "u1");
+    List&lt;Row&gt; matches = store.findBy(users, "age", new LongValue(37));
+    List&lt;Row&gt; range = store.findRangeBy(users, "age", new LongValue(30), new LongValue(40));
+}
+</code></pre>
+<h2 id="current-limits">Current Limits</h2>
+<ul>
+<li>no SQL planner or optimizer</li>
+<li>no joins or aggregations</li>
+<li>no composite primary keys</li>
+<li>no foreign-key enforcement</li>
+<li>SQL support is a narrow provider layer, not full ANSI SQL</li>
+<li>some structural delete cases in the native index tree still use rebuild fallback</li>
+</ul>
+
+        </section>
+    </main>
+</div>
+</body>
+</html>

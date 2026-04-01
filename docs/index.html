@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Nexum</title>
+    <meta name="description" content="A new embedded database designed around a single high-performance storage core with graph, relational, and object facades.">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/normalize.css">
+    <link rel="stylesheet" href="css/skeleton.css">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" type="image/png" href="images/favicon-32.png">
+</head>
+<body class="theme-shell theme-home">
+<div class="shell">
+    <div class="sidebar">
+    <div class="sidebar__brand">
+        <a class="sidebar__brand-link" href="/">
+            <span class="sidebar__mark"></span>
+            <span>
+                <strong>Nexum</strong>
+                <small>Native database</small>
+            </span>
+        </a>
+    </div>
+    <p class="sidebar__tagline">A modern, high-performance database built around one native storage core.</p>
+    <nav class="sidebar__nav">
+        <p class="sidebar__section-title">Documentation</p>
+        <ul>
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/architecture.html">Architecture</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/concurrency-model.html">Concurrency Model</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/index.html">Overview</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/object-facade.html">Object Facade</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/relational-facade.html">Relational Facade</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/server-query-guide.html">Server Query Guide</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/unified-engine-model.html">Unified Engine Model</a></li>
+
+
+        
+        </ul>
+    </nav>
+</div>
+
+    <main class="page-frame">
+        <section class="hero-panel hero-panel--home">
+            <p class="eyebrow">Database Architecture</p>
+            <h1>Nexum</h1>
+            <p class="hero-copy">Nexum combines a native page-backed engine, WAL-backed durability, and explicit multi-model facades into a database surface that stays fast, coherent, and operationally clear.</p>
+            <div class="signal-grid">
+                <article class="signal-card">
+                    <span class="signal-card__label">Engine</span>
+                    <strong>Single storage core</strong>
+                    <p>Shared record, schema, WAL, and index primitives drive every facade.</p>
+                </article>
+                <article class="signal-card">
+                    <span class="signal-card__label">Access Model</span>
+                    <strong>SWMR by design</strong>
+                    <p>Committed snapshots stay stable while the writer advances in a private overlay.</p>
+                </article>
+                <article class="signal-card">
+                    <span class="signal-card__label">Interface</span>
+                    <strong>Explicit APIs</strong>
+                    <p>No magic layers, no runtime persistence tricks, and no ambiguity about ownership.</p>
+                </article>
+            </div>
+        </section>
+        <section class="content-panel content-panel--home prose prose--home">
+<section>
+    <h2>One core, multiple models</h2>
+    <p>Nexum is built around a single native engine. Graph traversal, relational rows, and typed object persistence all ride on the same storage, index, and recovery path, which keeps the system coherent under load and easier to reason about.</p>
+</section>
+
+<section>
+    <h2>What to read first</h2>
+    <p>Start with <a href="/architecture.html">Architecture</a> for layering, continue with <a href="/unified-engine-model.html">Unified Engine Model</a> for shared storage concepts, and use the reference pages for the object, relational, concurrency, and query surfaces.</p>
+</section>
+
+<section>
+    <h2>Operating principles</h2>
+    <ul>
+        <li>Keep the engine record-based and facade-agnostic.</li>
+        <li>Keep schema and persistence semantics explicit.</li>
+        <li>Let storage and indexing do the heavy work beneath stable APIs.</li>
+        <li>Favor disciplined implementation over hidden framework behavior.</li>
+    </ul>
+</section>
+
+        </section>
+    </main>
+</div>
+</body>
+</html>

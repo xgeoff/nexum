@@ -154,6 +154,24 @@ final class NativeIndexStore implements AutoCloseable {
         pageFile.writePayload(encodeManifest(new Manifest(manifestEntries)));
     }
 
+    void persistTouchedFields(
+            ExactMatchIndexManager exactManager,
+            OrderedRangeIndexManager orderedManager,
+            Map<String, Set<String>> exactTouchedFields,
+            Map<String, Set<String>> orderedTouchedFields
+    ) throws IOException {
+        Manifest manifest = readManifest();
+        Map<ManifestFieldKey, ManifestEntry> updatedEntries = new LinkedHashMap<>();
+        if (manifest != null) {
+            for (ManifestEntry entry : manifest.entries()) {
+                updatedEntries.put(new ManifestFieldKey(entry.kind(), entry.namespace(), entry.fieldName()), entry);
+            }
+        }
+        persistTouchedFieldsForKind(updatedEntries, ENTRY_EXACT, exactManager, exactTouchedFields);
+        persistTouchedFieldsForKind(updatedEntries, ENTRY_ORDERED, orderedManager, orderedTouchedFields);
+        pageFile.writePayload(encodeManifest(new Manifest(new ArrayList<>(updatedEntries.values()))));
+    }
+
     void applyExactAdd(String namespace, String fieldName, FieldValue fieldValue, Object identifier) throws IOException {
         applyFieldMutation(ENTRY_EXACT, namespace, fieldName, fieldValue, identifier, true);
     }
@@ -241,6 +259,34 @@ final class NativeIndexStore implements AutoCloseable {
             return null;
         }
         return decodeManifest(manifestPayload);
+    }
+
+    private void persistTouchedFieldsForKind(
+            Map<ManifestFieldKey, ManifestEntry> updatedEntries,
+            byte kind,
+            Object manager,
+            Map<String, Set<String>> touchedFields
+    ) throws IOException {
+        for (Map.Entry<String, Set<String>> namespaceEntry : touchedFields.entrySet()) {
+            String namespace = namespaceEntry.getKey();
+            Map<String, Map<FieldValue, Set<Object>>> fieldSnapshots = switch (kind) {
+                case ENTRY_EXACT -> ((ExactMatchIndexManager) manager).snapshotNamespace(namespace);
+                case ENTRY_ORDERED -> ((OrderedRangeIndexManager) manager).snapshotNamespace(namespace);
+                default -> throw new IOException("Unsupported touched-field persistence kind " + kind);
+            };
+            for (String fieldName : namespaceEntry.getValue()) {
+                ManifestFieldKey key = new ManifestFieldKey(kind, namespace, fieldName);
+                Map<FieldValue, Set<Object>> fieldValues = fieldSnapshots.get(fieldName);
+                if (fieldValues == null || fieldValues.isEmpty()) {
+                    updatedEntries.remove(key);
+                    continue;
+                }
+                updatedEntries.put(
+                        key,
+                        writeFieldDirectoryEntry(kind, namespace, fieldName, fieldValues)
+                );
+            }
+        }
     }
 
     private void applyFieldMutation(
@@ -2107,6 +2153,9 @@ final class NativeIndexStore implements AutoCloseable {
         private Manifest(List<ManifestEntry> entries) {
             this(VERSION, entries);
         }
+    }
+
+    private record ManifestFieldKey(byte kind, String namespace, String fieldName) {
     }
 
     private record MembershipPage(int nextPage, Object identifier) {

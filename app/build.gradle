@@ -11,6 +11,9 @@ plugins {
 
     // Use the java-library plugin so this project builds a reusable library
     id 'java-library'
+
+    // Allow running the lightweight benchmark harness
+    id 'application'
 }
 
 repositories {
@@ -40,4 +43,19 @@ java {
 // Fail loudly on use of deprecated or unsafe APIs
 tasks.withType(JavaCompile).configureEach {
     options.compilerArgs += ['-Xlint:deprecation', '-Xlint:unchecked']
+}
+
+application {
+    mainClass = 'biz.digitalindustry.storage.benchmark.NexumBenchmarkMain'
+}
+
+tasks.register('benchmark', JavaExec) {
+    group = 'verification'
+    description = 'Runs the lightweight Nexum benchmark harness.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = application.mainClass
+    def benchmarkProfile = project.findProperty('benchmarkProfile') ?: System.getProperty('benchmarkProfile')
+    if (benchmarkProfile != null) {
+        systemProperty 'benchmarkProfile', benchmarkProfile
+    }
 }

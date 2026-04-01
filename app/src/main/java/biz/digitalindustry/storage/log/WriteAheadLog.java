@@ -101,6 +101,17 @@ public class WriteAheadLog implements Closeable {
         return path;
     }
 
+    public synchronized long sizeBytes() {
+        if (file == null) {
+            throw new IllegalStateException("WAL is not open");
+        }
+        try {
+            return file.length();
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to read WAL size", e);
+        }
+    }
+
     public synchronized void clear() {
         if (file == null) {
             throw new IllegalStateException("WAL is not open");

@@ -1,1 +1,0 @@
-java -classpath ../../lib/perst-jassist.jar;../../lib/javassist.jar;. Launcher Guess

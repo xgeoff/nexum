@@ -1,0 +1,26 @@
+---
+title = "Nexum"
+description = "A new embedded database designed around a single high-performance storage core with graph, relational, and object facades."
+layout = "default"
+eyebrow = "Database Architecture"
+lead = "Nexum combines a native page-backed engine, WAL-backed durability, and explicit multi-model facades into a database surface that stays fast, coherent, and operationally clear."
+---
+<section>
+    <h2>One core, multiple models</h2>
+    <p>Nexum is built around a single native engine. Graph traversal, relational rows, and typed object persistence all ride on the same storage, index, and recovery path, which keeps the system coherent under load and easier to reason about.</p>
+</section>
+
+<section>
+    <h2>What to read first</h2>
+    <p>Start with <a href="/architecture.html">Architecture</a> for layering, continue with <a href="/unified-engine-model.html">Unified Engine Model</a> for shared storage concepts, and use the reference pages for the object, relational, concurrency, and query surfaces.</p>
+</section>
+
+<section>
+    <h2>Operating principles</h2>
+    <ul>
+        <li>Keep the engine record-based and facade-agnostic.</li>
+        <li>Keep schema and persistence semantics explicit.</li>
+        <li>Let storage and indexing do the heavy work beneath stable APIs.</li>
+        <li>Favor disciplined implementation over hidden framework behavior.</li>
+    </ul>
+</section>

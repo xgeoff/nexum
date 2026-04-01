@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Concurrency Model</title>
+    <meta name="description" content="The current single-writer, multi-reader contract exposed by the native engine and facade APIs.">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/normalize.css">
+    <link rel="stylesheet" href="css/skeleton.css">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" type="image/png" href="images/favicon-32.png">
+</head>
+<body class="theme-shell theme-docs">
+<div class="shell">
+    <div class="sidebar">
+    <div class="sidebar__brand">
+        <a class="sidebar__brand-link" href="/">
+            <span class="sidebar__mark"></span>
+            <span>
+                <strong>Nexum</strong>
+                <small>Native database</small>
+            </span>
+        </a>
+    </div>
+    <p class="sidebar__tagline">A modern, high-performance database built around one native storage core.</p>
+    <nav class="sidebar__nav">
+        <p class="sidebar__section-title">Documentation</p>
+        <ul>
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/architecture.html">Architecture</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/concurrency-model.html">Concurrency Model</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/index.html">Overview</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/object-facade.html">Object Facade</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/relational-facade.html">Relational Facade</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/server-query-guide.html">Server Query Guide</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/unified-engine-model.html">Unified Engine Model</a></li>
+
+
+        
+        </ul>
+    </nav>
+</div>
+
+    <main class="page-frame">
+        <section class="hero-panel hero-panel--reference">
+            <p class="eyebrow">Correctness Contract</p>
+            <h1>Concurrency Model</h1>
+            <p class="hero-copy">Nexum currently standardizes on a single-writer and multi-reader model so committed reads stay stable while writes advance through a private overlay.</p>
+            <div class="hero-chip-row">
+                <span class="hero-chip">Isolation Surface</span>
+                <span class="hero-chip hero-chip--muted">Committed snapshots only</span>
+            </div>
+        </section>
+        <section class="content-panel prose prose--docs">
+<h1 id="concurrency-model">Concurrency Model</h1>
+<p>Status: active implementation contract</p>
+<p>Nexum currently adopts a single-writer/multi-reader model.</p>
+<h2 id="guarantee">Guarantee</h2>
+<ul>
+<li>Any number of read operations may be in flight concurrently at the API layer.</li>
+<li>Write operations are exclusive.</li>
+<li>A single writer may be active while readers are also active.</li>
+<li>Readers observe last committed state only.</li>
+<li>The active writer observes its own private overlay plus the last committed state.</li>
+<li>Nexum does not expose dirty reads or partially applied transaction state.</li>
+</ul>
+<h2 id="scope">Scope</h2>
+<p>This guarantee applies to:</p>
+<ul>
+<li>the native object facade</li>
+<li>the native relational facade</li>
+<li>the native graph facade</li>
+<li>the Micronaut graph service wrapper</li>
+</ul>
+<p>The storage engine also exposes <code>TransactionMode.READ_ONLY</code> and enforces the same contract for direct engine callers.</p>
+<h2 id="current-implementation-notes">Current Implementation Notes</h2>
+<ul>
+<li>The contract is about correctness and isolation, not peak parallel throughput.</li>
+<li>Readers use an atomically published committed snapshot while the writer works in private overlay state.</li>
+<li>Commit publishes new committed state only after record, schema, root, and index changes are ready.</li>
+<li>Only one write transaction may be active at a time.</li>
+<li>There is no MVCC yet.</li>
+<li>There is no deadlock detection because the current model does not permit multiple concurrent writers.</li>
+</ul>
+<h2 id="non-goals-for-this-phase">Non-Goals For This Phase</h2>
+<ul>
+<li>multi-writer transactions</li>
+<li>snapshot isolation</li>
+<li>distributed coordination</li>
+<li>lock escalation</li>
+<li>cross-process writer coordination</li>
+</ul>
+<h2 id="operational-guidance">Operational Guidance</h2>
+<ul>
+<li>Use the embedded facades for normal access patterns.</li>
+<li>Treat the HTTP query layer as an experimental API surface over the graph facade, not as the primary concurrency boundary.</li>
+<li>If a workload needs high-throughput concurrent reads during sustained writes, benchmark it explicitly before assuming the current implementation is sufficient.</li>
+</ul>
+
+        </section>
+    </main>
+</div>
+</body>
+</html>

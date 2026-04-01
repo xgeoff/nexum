@@ -23,13 +23,13 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 
-public class PageBackedRecordStore implements RecordStore, Closeable {
+public class PageBackedRecordStore implements ManagedRecordStore, Closeable {
     private static final int METADATA_MAGIC = 0x5253544d;
     private static final int METADATA_VERSION = 1;
 
     @FunctionalInterface
     public interface MutationListener {
-        void onMutation(byte operationType, Record record, RecordId recordId);
+        void onMutation(byte operationType, Record beforeRecord, Record afterRecord, RecordId recordId);
     }
 
     private final PageFile pageFile;
@@ -77,7 +77,7 @@ public class PageBackedRecordStore implements RecordStore, Closeable {
         Record stored = new Record(id, type, record.fields());
         nextId.set(Math.max(nextId.get(), id.value() + 1));
         storeUpsert(stored);
-        notifyMutation(WriteAheadLog.UPSERT, stored, id);
+        notifyMutation(WriteAheadLog.UPSERT, null, stored, id);
         return stored;
     }
 
@@ -91,16 +91,18 @@ public class PageBackedRecordStore implements RecordStore, Closeable {
         if (record.id() == null || !records.containsKey(record.id())) {
             throw new IllegalArgumentException("Unknown record id: " + (record.id() == null ? "null" : record.id().value()));
         }
+        Record previous = records.get(record.id());
         storeUpsert(record);
-        notifyMutation(WriteAheadLog.UPSERT, record, record.id());
+        notifyMutation(WriteAheadLog.UPSERT, previous, record, record.id());
         return record;
     }
 
     @Override
     public synchronized boolean delete(RecordId id) {
+        Record previous = records.get(id);
         boolean deleted = deleteInternal(id);
         if (deleted) {
-            notifyMutation(WriteAheadLog.DELETE, null, id);
+            notifyMutation(WriteAheadLog.DELETE, previous, null, id);
         }
         return deleted;
     }
@@ -189,7 +191,7 @@ public class PageBackedRecordStore implements RecordStore, Closeable {
 
     public synchronized byte[] encodedMetadata() {
         try {
-            return encodeMetadataEnvelope(metadataGeneration, encodeMetadataBody(encodeRecordSlotIndex(), encodeAllocatorState()));
+            return encodeMetadataEnvelope(metadataGeneration, encodeMetadataBody());
         } catch (IOException e) {
             throw new RuntimeException("Failed to encode record store metadata", e);
         }
@@ -200,23 +202,15 @@ public class PageBackedRecordStore implements RecordStore, Closeable {
     }
 
     public synchronized void writeIncompleteMetadataCheckpointForTest() throws IOException {
-        pageFile.writeIncompleteSlotCheckpointForTest(encodeMetadataEnvelope(metadataGeneration + 1L, encodeMetadataBody(encodeRecordSlotIndex(), encodeAllocatorState())));
+        pageFile.writeIncompleteSlotCheckpointForTest(encodeMetadataEnvelope(metadataGeneration + 1L, encodeMetadataBody()));
     }
 
     public synchronized byte[] encodedRecordSlotIndex() {
-        try {
-            return encodeRecordSlotIndex();
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to encode record slot index", e);
-        }
+        return new byte[0];
     }
 
     public synchronized byte[] encodedAllocatorState() {
-        try {
-            return encodeAllocatorState();
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to encode allocator state", e);
-        }
+        return new byte[0];
     }
 
     public synchronized Map<Integer, byte[]> encodedPages() {
@@ -271,7 +265,7 @@ public class PageBackedRecordStore implements RecordStore, Closeable {
     ) {
         try {
             pageFile.setPageCount(pageCount);
-            pageFile.writePayload(encodeMetadataEnvelope(metadataGeneration + 1L, encodeMetadataBody(recordSlotIndexPayload, allocatorStatePayload)));
+            pageFile.writePayload(encodeMetadataEnvelope(metadataGeneration + 1L, encodeMetadataBody()));
             for (Map.Entry<Integer, byte[]> entry : pagePayloads.entrySet()) {
                 pageFile.writePage(entry.getKey(), entry.getValue());
             }
@@ -289,7 +283,7 @@ public class PageBackedRecordStore implements RecordStore, Closeable {
     ) {
         try {
             pageFile.setPageCount(pageCount);
-            pageFile.writePayload(encodeMetadataEnvelope(metadataGeneration + 1L, encodeMetadataBody(recordSlotIndexPayload, allocatorStatePayload)));
+            pageFile.writePayload(encodeMetadataEnvelope(metadataGeneration + 1L, encodeMetadataBody()));
             for (Map.Entry<Integer, byte[]> entry : pageDiffPayloads.entrySet()) {
                 byte[] currentPayload = pageFile.readPage(entry.getKey());
                 SlottedPage currentPage = currentPayload.length == 0 ? new SlottedPage() : SlottedPage.decode(currentPayload);
@@ -316,28 +310,24 @@ public class PageBackedRecordStore implements RecordStore, Closeable {
         Metadata metadata = readMetadata();
         nextId.set(metadata.nextId);
         metadataGeneration = metadata.generation;
-        recordSlots.putAll(metadata.recordSlots);
-        allocatorState.putAll(metadata.allocatorState);
 
         for (int pageNo = 0; pageNo < pageFile.getPageCount(); pageNo++) {
             byte[] payload = pageFile.readPage(pageNo);
             SlottedPage page = payload.length == 0 ? new SlottedPage() : SlottedPage.decode(payload);
             pages.put(pageNo, page);
-            if (!allocatorState.containsKey(pageNo)) {
-                allocatorState.put(pageNo, AllocatorPageState.fromPage(pageNo, page, pageFile.pageSize()));
-            }
+            allocatorState.put(pageNo, AllocatorPageState.fromPage(pageNo, page, pageFile.pageSize()));
         }
 
-        for (Map.Entry<RecordId, PageSlot> entry : recordSlots.entrySet()) {
-            SlottedPage page = pages.get(entry.getValue().pageNo());
-            if (page == null) {
-                throw new IOException("Missing page " + entry.getValue().pageNo() + " for record " + entry.getKey().value());
+        for (Map.Entry<Integer, SlottedPage> pageEntry : pages.entrySet()) {
+            for (int slotIndex = 0; slotIndex < pageEntry.getValue().slotCount(); slotIndex++) {
+                byte[] payload = pageEntry.getValue().get(slotIndex);
+                if (payload == null) {
+                    continue;
+                }
+                Record record = RecordCodec.decode(payload, entityTypeResolver);
+                records.put(record.id(), record);
+                recordSlots.put(record.id(), new PageSlot(pageEntry.getKey(), slotIndex));
             }
-            byte[] payload = page.get(entry.getValue().slotIndex());
-            if (payload == null) {
-                throw new IOException("Missing slot " + entry.getValue().slotIndex() + " for record " + entry.getKey().value());
-            }
-            records.put(entry.getKey(), RecordCodec.decode(payload, entityTypeResolver));
         }
         clearDirtyTracking();
     }
@@ -400,7 +390,7 @@ public class PageBackedRecordStore implements RecordStore, Closeable {
     private Metadata readMetadata() throws IOException {
         byte[] payload = pageFile.readPayload();
         if (payload.length == 0) {
-            return new Metadata(1L, 1L, Map.of(), Map.of());
+            return new Metadata(1L, 1L);
         }
         DataInputStream header = new DataInputStream(new ByteArrayInputStream(payload));
         if (payload.length >= Integer.BYTES * 3 + Long.BYTES && header.readInt() == METADATA_MAGIC) {
@@ -425,7 +415,7 @@ public class PageBackedRecordStore implements RecordStore, Closeable {
     private void persistMetadata() {
         try {
             metadataGeneration++;
-            pageFile.writePayload(encodeMetadataEnvelope(metadataGeneration, encodeMetadataBody(encodeRecordSlotIndex(), encodeAllocatorState())));
+            pageFile.writePayload(encodeMetadataEnvelope(metadataGeneration, encodeMetadataBody()));
         } catch (IOException e) {
             throw new RuntimeException("Failed to persist record store metadata", e);
         }
@@ -437,7 +427,7 @@ public class PageBackedRecordStore implements RecordStore, Closeable {
         }
     }
 
-    private record Metadata(long nextId, long generation, Map<RecordId, PageSlot> recordSlots, Map<Integer, AllocatorPageState> allocatorState) {
+    private record Metadata(long nextId, long generation) {
     }
 
     private record PageSlot(int pageNo, int slotIndex) {
@@ -501,18 +491,16 @@ public class PageBackedRecordStore implements RecordStore, Closeable {
         return true;
     }
 
-    private void notifyMutation(byte operationType, Record record, RecordId recordId) {
+    private void notifyMutation(byte operationType, Record beforeRecord, Record afterRecord, RecordId recordId) {
         if (mutationListener != null) {
-            mutationListener.onMutation(operationType, record, recordId);
+            mutationListener.onMutation(operationType, beforeRecord, afterRecord, recordId);
         }
     }
 
-    private byte[] encodeMetadataBody(byte[] recordSlotIndexPayload, byte[] allocatorStatePayload) throws IOException {
+    private byte[] encodeMetadataBody() throws IOException {
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         DataOutputStream out = new DataOutputStream(buffer);
         out.writeLong(nextId.get());
-        out.write(recordSlotIndexPayload);
-        out.write(allocatorStatePayload);
         out.flush();
         return buffer.toByteArray();
     }
@@ -534,52 +522,7 @@ public class PageBackedRecordStore implements RecordStore, Closeable {
     private Metadata decodeMetadataBody(byte[] body, long generation) throws IOException {
         DataInputStream in = new DataInputStream(new ByteArrayInputStream(body));
         long nextId = in.readLong();
-        int recordCount = in.readInt();
-        Map<RecordId, PageSlot> recordSlots = new LinkedHashMap<>();
-        for (int i = 0; i < recordCount; i++) {
-            recordSlots.put(new RecordId(in.readLong()), new PageSlot(in.readInt(), in.readInt()));
-        }
-        Map<Integer, AllocatorPageState> allocatorState = new LinkedHashMap<>();
-        if (in.available() > 0) {
-            int allocatorCount = in.readInt();
-            for (int i = 0; i < allocatorCount; i++) {
-                int pageNo = in.readInt();
-                allocatorState.put(pageNo, new AllocatorPageState(
-                        pageNo,
-                        in.readInt(),
-                        in.readInt(),
-                        in.readBoolean()
-                ));
-            }
-        }
-        return new Metadata(nextId, generation, recordSlots, allocatorState);
-    }
-
-    private byte[] encodeRecordSlotIndex() throws IOException {
-        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-        DataOutputStream out = new DataOutputStream(buffer);
-        out.writeInt(recordSlots.size());
-        for (Map.Entry<RecordId, PageSlot> entry : recordSlots.entrySet()) {
-            out.writeLong(entry.getKey().value());
-            out.writeInt(entry.getValue().pageNo());
-            out.writeInt(entry.getValue().slotIndex());
-        }
-        out.flush();
-        return buffer.toByteArray();
-    }
-
-    private byte[] encodeAllocatorState() throws IOException {
-        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-        DataOutputStream out = new DataOutputStream(buffer);
-        out.writeInt(allocatorState.size());
-        for (AllocatorPageState state : allocatorState.values()) {
-            out.writeInt(state.pageNo());
-            out.writeInt(state.freeBytes());
-            out.writeInt(state.slotCount());
-            out.writeBoolean(state.hasReusableSlot());
-        }
-        out.flush();
-        return buffer.toByteArray();
+        return new Metadata(nextId, generation);
     }
 
     private void flushToDisk() throws IOException {

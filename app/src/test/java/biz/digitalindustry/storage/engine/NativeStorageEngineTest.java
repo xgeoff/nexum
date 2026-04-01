@@ -21,6 +21,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.*;
 
@@ -58,6 +61,29 @@ public class NativeStorageEngineTest {
 
         engine.root().set("root-object");
         assertEquals("root-object", engine.root().get(String.class));
+    }
+
+    @Test
+    public void testMemoryOnlyModeKeepsStateWithoutDiskArtifacts() {
+        engine.open(new StorageConfig("memory:test", 8192, StorageConfig.DEFAULT_MAX_WAL_BYTES, false, true));
+
+        EntityType person = new EntityType(
+                "Person",
+                List.of(new FieldDefinition("age", ValueType.LONG, false, false)),
+                List.of(new IndexDefinition("person_pk", IndexKind.PRIMARY, List.of("id")))
+        );
+        engine.schemaRegistry().register(person);
+
+        try (Transaction tx = engine.begin(TransactionMode.READ_WRITE)) {
+            engine.root().set("memory-root");
+            engine.recordStore().create(person, new Record(null, person, Map.of("age", new LongValue(9L))));
+            tx.commit();
+        }
+
+        assertEquals("memory-root", engine.root().get(String.class));
+        assertFalse(engine.needsCheckpoint());
+        assertEquals(0L, engine.walSizeBytes());
+        assertTrue(engine.recordStore().scan(person).iterator().hasNext());
     }
 
     @Test
@@ -122,6 +148,35 @@ public class NativeStorageEngineTest {
     }
 
     @Test
+    public void testReopenPreservesHundredsOfRecordsWithoutMetadataOverflow() throws Exception {
+        dbPath = Files.createTempFile("native-storage-large-metadata", ".dbs");
+        Files.deleteIfExists(dbPath);
+
+        EntityType person = new EntityType(
+                "Person",
+                List.of(new FieldDefinition("age", ValueType.LONG, false, false)),
+                List.of(new IndexDefinition("person_pk", IndexKind.PRIMARY, List.of("id")))
+        );
+
+        engine.open(new StorageConfig(dbPath.toString(), 8192));
+        engine.schemaRegistry().register(person);
+        for (int i = 0; i < 500; i++) {
+            try (Transaction tx = engine.begin(TransactionMode.READ_WRITE)) {
+                engine.recordStore().create(person, new Record(null, person, Map.of("age", new LongValue(i))));
+                tx.commit();
+            }
+        }
+        engine.close();
+
+        engine.open(new StorageConfig(dbPath.toString(), 8192));
+        int count = 0;
+        for (Record ignored : engine.recordStore().scan(person)) {
+            count++;
+        }
+        assertEquals(500, count);
+    }
+
+    @Test
     public void testRollbackRestoresPreviousState() throws Exception {
         dbPath = Files.createTempFile("native-storage-rollback", ".dbs");
         Files.deleteIfExists(dbPath);
@@ -142,6 +197,140 @@ public class NativeStorageEngineTest {
 
         assertNull(engine.root().get());
         assertFalse(engine.recordStore().scan(person).iterator().hasNext());
+    }
+
+    @Test
+    public void testRollbackUndoesCreateUpdateAndDeleteWithoutFullSnapshot() throws Exception {
+        dbPath = Files.createTempFile("native-storage-rollback-write-set", ".dbs");
+        Files.deleteIfExists(dbPath);
+        engine.open(new StorageConfig(dbPath.toString(), 8192));
+
+        EntityType person = new EntityType(
+                "Person",
+                List.of(new FieldDefinition("age", ValueType.LONG, false, false)),
+                List.of(new IndexDefinition("person_pk", IndexKind.PRIMARY, List.of("id")))
+        );
+        engine.schemaRegistry().register(person);
+
+        Record created;
+        try (Transaction tx = engine.begin(TransactionMode.READ_WRITE)) {
+            created = engine.recordStore().create(person, new Record(null, person, Map.of("age", new LongValue(10))));
+            tx.commit();
+        }
+
+        try (Transaction tx = engine.begin(TransactionMode.READ_WRITE)) {
+            engine.root().set("rolled-back-root");
+            engine.schemaRegistry().register(new EntityType("Transient", List.of(), List.of()));
+            engine.recordStore().update(new Record(created.id(), person, Map.of("age", new LongValue(20))));
+            engine.recordStore().create(person, new Record(null, person, Map.of("age", new LongValue(30))));
+            engine.recordStore().delete(created.id());
+            tx.rollback();
+        }
+
+        assertNull(engine.root().get());
+        assertNull(engine.schemaRegistry().entityType("Transient"));
+        Record restored = engine.recordStore().get(created.id());
+        assertNotNull(restored);
+        assertEquals(new LongValue(10), restored.fields().get("age"));
+        int count = 0;
+        for (Record ignored : engine.recordStore().scan(person)) {
+            count++;
+        }
+        assertEquals(1, count);
+    }
+
+    @Test
+    public void testRollbackUndoesPendingIndexMutationsWithoutIndexSnapshots() throws Exception {
+        dbPath = Files.createTempFile("native-storage-index-rollback", ".dbs");
+        Files.deleteIfExists(dbPath);
+        engine.open(new StorageConfig(dbPath.toString(), 8192));
+
+        try (Transaction tx = engine.begin(TransactionMode.READ_WRITE)) {
+            engine.exactIndexAdd(
+                    "object:people",
+                    List.of("name"),
+                    Map.of("name", new StringValue("Ada")),
+                    "person-1"
+            );
+            engine.orderedIndexAdd(
+                    "table:users",
+                    List.of("age"),
+                    "age",
+                    new LongValue(37L),
+                    "u1"
+            );
+            tx.commit();
+        }
+
+        try (Transaction tx = engine.begin(TransactionMode.READ_WRITE)) {
+            engine.exactIndexAdd(
+                    "object:people",
+                    List.of("name"),
+                    Map.of("name", new StringValue("Grace")),
+                    "person-2"
+            );
+            engine.exactIndexRemove(
+                    "object:people",
+                    List.of("name"),
+                    Map.of("name", new StringValue("Ada")),
+                    "person-1"
+            );
+            engine.orderedIndexRemove(
+                    "table:users",
+                    List.of("age"),
+                    "age",
+                    new LongValue(37L),
+                    "u1"
+            );
+            tx.rollback();
+        }
+
+        assertEquals(java.util.Set.of("person-1"), engine.exactIndexFind("object:people", "name", new StringValue("Ada")));
+        assertEquals(java.util.Set.of(), engine.exactIndexFind("object:people", "name", new StringValue("Grace")));
+        assertEquals(java.util.Set.of("u1"), engine.orderedIndexRange("table:users", "age", new LongValue(30L), new LongValue(40L)));
+    }
+
+    @Test
+    public void testReaderDuringWriteSeesLastCommittedStateOnly() throws Exception {
+        dbPath = Files.createTempFile("native-storage-overlap", ".dbs");
+        Files.deleteIfExists(dbPath);
+        engine.open(new StorageConfig(dbPath.toString(), 8192));
+
+        EntityType person = new EntityType(
+                "Person",
+                List.of(new FieldDefinition("age", ValueType.LONG, false, false)),
+                List.of(new IndexDefinition("person_pk", IndexKind.PRIMARY, List.of("id")))
+        );
+        engine.schemaRegistry().register(person);
+
+        Record created;
+        try (Transaction tx = engine.begin(TransactionMode.READ_WRITE)) {
+            created = engine.recordStore().create(person, new Record(null, person, Map.of("age", new LongValue(10))));
+            tx.commit();
+        }
+
+        CountDownLatch readerDone = new CountDownLatch(1);
+        AtomicReference<LongValue> observed = new AtomicReference<>();
+
+        try (Transaction tx = engine.begin(TransactionMode.READ_WRITE)) {
+            engine.recordStore().update(new Record(created.id(), person, Map.of("age", new LongValue(20))));
+
+            Thread reader = new Thread(() -> {
+                try (Transaction ignored = engine.begin(TransactionMode.READ_ONLY)) {
+                    Record seen = engine.recordStore().get(created.id());
+                    observed.set((LongValue) seen.fields().get("age"));
+                } finally {
+                    readerDone.countDown();
+                }
+            });
+            reader.start();
+
+            assertTrue(readerDone.await(2, TimeUnit.SECONDS));
+            assertEquals(new LongValue(10), observed.get());
+            tx.commit();
+        }
+
+        assertEquals(new LongValue(20), engine.recordStore().get(created.id()).fields().get("age"));
     }
 
     @Test
@@ -362,6 +551,13 @@ public class NativeStorageEngineTest {
         assertNotNull(first);
         assertTrue(recordStore.currentPageCount() >= 2);
 
+        long recordPageEntriesBefore = engine.writeAheadLog().readEntries().stream()
+                .filter(entry -> entry.type() == WriteAheadLog.RECORD_PAGE_DIFF)
+                .count();
+        long deprecatedFullPageEntriesBefore = engine.writeAheadLog().readEntries().stream()
+                .filter(entry -> entry.type() == DEPRECATED_RECORD_PAGE_ENTRY)
+                .count();
+
         engine.begin(TransactionMode.READ_WRITE);
         recordStore.update(new Record(first.id(), person, Map.of("age", new LongValue(999))));
         engine.writeCommittedStateToWalForTest();
@@ -373,8 +569,9 @@ public class NativeStorageEngineTest {
                 .filter(entry -> entry.type() == DEPRECATED_RECORD_PAGE_ENTRY)
                 .count();
 
-        assertEquals(1L, recordPageEntries);
-        assertEquals(0L, deprecatedFullPageEntries);
+        assertEquals(1L, recordPageEntries - recordPageEntriesBefore);
+        assertEquals(0L, deprecatedFullPageEntries - deprecatedFullPageEntriesBefore);
+        engine.closeWithoutCheckpointForTest();
     }
 
     @Test
@@ -407,6 +604,7 @@ public class NativeStorageEngineTest {
         assertEquals(1L, slotIndexEntries);
         assertEquals(1L, allocatorEntries);
         assertEquals(0L, deprecatedCombinedEntries);
+        engine.closeWithoutCheckpointForTest();
     }
 
     @Test
@@ -436,6 +634,7 @@ public class NativeStorageEngineTest {
         byte[] fullPagePayload = recordStore.encodedDirtyPages().values().iterator().next();
 
         assertTrue(diffPayload.length < fullPagePayload.length);
+        engine.closeWithoutCheckpointForTest();
     }
 
     @Test
@@ -859,5 +1058,103 @@ public class NativeStorageEngineTest {
         assertEquals(java.util.Set.of("person-2"), engine.exactIndexFind("object:people", "city", new StringValue("London")));
         assertEquals(java.util.Set.of("u1"), engine.orderedIndexRange("table:users", "age", new LongValue(30L), new LongValue(40L)));
         assertEquals(java.util.Set.of(), engine.orderedIndexRange("table:users", "age", new LongValue(41L), new LongValue(41L)));
+    }
+
+    @Test
+    public void testCommittedTransactionalIndexMutationsPersistWithoutFullCheckpoint() throws Exception {
+        dbPath = Files.createTempFile("native-storage-transactional-index", ".dbs");
+        Files.deleteIfExists(dbPath);
+
+        engine.open(new StorageConfig(dbPath.toString(), 8192));
+        try (Transaction tx = engine.begin(TransactionMode.READ_WRITE)) {
+            engine.exactIndexAdd(
+                    "object:people",
+                    List.of("name", "city"),
+                    Map.of("name", new StringValue("Ada"), "city", new StringValue("Paris")),
+                    "person-1"
+            );
+            engine.orderedIndexAdd(
+                    "table:users",
+                    List.of("age"),
+                    "age",
+                    new LongValue(37L),
+                    "u1"
+            );
+            tx.commit();
+        }
+        try (Transaction tx = engine.begin(TransactionMode.READ_WRITE)) {
+            engine.exactIndexAdd(
+                    "object:people",
+                    List.of("name", "city"),
+                    Map.of("name", new StringValue("Grace"), "city", new StringValue("London")),
+                    "person-2"
+            );
+            engine.orderedIndexRemove(
+                    "table:users",
+                    List.of("age"),
+                    "age",
+                    new LongValue(37L),
+                    "u1"
+            );
+            tx.commit();
+        }
+
+        engine.closeWithoutCheckpointForTest();
+
+        engine.open(new StorageConfig(dbPath.toString(), 8192));
+        assertEquals(java.util.Set.of("person-1"), engine.exactIndexFind("object:people", "name", new StringValue("Ada")));
+        assertEquals(java.util.Set.of("person-2"), engine.exactIndexFind("object:people", "city", new StringValue("London")));
+        assertEquals(java.util.Set.of(), engine.orderedIndexRange("table:users", "age", new LongValue(30L), new LongValue(40L)));
+    }
+
+    @Test
+    public void testWalThresholdOnlyRequestsCheckpoint() throws Exception {
+        dbPath = Files.createTempFile("native-storage-checkpoint-request", ".dbs");
+        Files.deleteIfExists(dbPath);
+
+        engine.open(new StorageConfig(dbPath.toString(), 8192, 1L, true));
+
+        EntityType person = new EntityType(
+                "Person",
+                List.of(new FieldDefinition("age", ValueType.LONG, false, false)),
+                List.of(new IndexDefinition("person_pk", IndexKind.PRIMARY, List.of("id")))
+        );
+        engine.schemaRegistry().register(person);
+
+        try (Transaction tx = engine.begin(TransactionMode.READ_WRITE)) {
+            engine.recordStore().create(person, new Record(null, person, Map.of("age", new LongValue(1L))));
+            tx.commit();
+        }
+
+        assertTrue(engine.walSizeBytes() > 1L);
+        assertTrue(engine.needsCheckpoint());
+    }
+
+    @Test
+    public void testExplicitCheckpointClearsWalAndCheckpointRequest() throws Exception {
+        dbPath = Files.createTempFile("native-storage-explicit-checkpoint", ".dbs");
+        Files.deleteIfExists(dbPath);
+
+        engine.open(new StorageConfig(dbPath.toString(), 8192, 1L, true));
+
+        EntityType person = new EntityType(
+                "Person",
+                List.of(new FieldDefinition("age", ValueType.LONG, false, false)),
+                List.of(new IndexDefinition("person_pk", IndexKind.PRIMARY, List.of("id")))
+        );
+        engine.schemaRegistry().register(person);
+
+        try (Transaction tx = engine.begin(TransactionMode.READ_WRITE)) {
+            engine.recordStore().create(person, new Record(null, person, Map.of("age", new LongValue(2L))));
+            tx.commit();
+        }
+
+        assertTrue(engine.needsCheckpoint());
+        assertTrue(engine.walSizeBytes() > 1L);
+
+        engine.checkpoint();
+
+        assertFalse(engine.needsCheckpoint());
+        assertTrue(engine.walSizeBytes() <= 16L);
     }
 }
