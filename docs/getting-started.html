@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Getting Started</title>
+    <meta name="description" content="How to build Nexum, use the core library directly, run the optional server, embed it in Spring Boot, and call the sample HTTP API.">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/normalize.css">
+    <link rel="stylesheet" href="css/skeleton.css">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" type="image/png" href="images/favicon-32.png">
+</head>
+<body class="theme-shell theme-docs">
+<div class="shell">
+    <div class="sidebar">
+    <div class="sidebar__brand">
+        <a class="sidebar__brand-link" href="/nexum">
+            <span class="sidebar__mark"></span>
+            <span>
+                <strong>Nexum</strong>
+                <small>Native database</small>
+            </span>
+        </a>
+    </div>
+    <p class="sidebar__tagline">A modern, high-performance database built around one native storage core.</p>
+    <p class="sidebar__tagline"><a href="https://github.com/xgeoff/nexum">github.com/xgeoff/nexum</a></p>
+    <nav class="sidebar__nav">
+        <p class="sidebar__section-title">Documentation</p>
+        <ul>
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/nexum/architecture.html">Architecture</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/nexum/concurrency-model.html">Concurrency Model</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/nexum/getting-started.html">Getting Started</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/nexum/index.html">Overview</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/nexum/object-facade.html">Object Facade</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/nexum/relational-facade.html">Relational Facade</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/nexum/server-query-guide.html">Server Query Guide</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/nexum/unified-engine-model.html">Unified Engine Model</a></li>
+
+
+        
+        </ul>
+    </nav>
+</div>
+
+    <main class="page-frame">
+        <section class="hero-panel hero-panel--systems">
+            <div class="hero-panel__grid">
+                <div>
+                    <p class="eyebrow">Quick Start</p>
+                    <h1>Getting Started</h1>
+                    <p class="hero-copy">Start with the core library when you want embedded storage, add the optional server when you want HTTP access, and keep both paths explicit and small.</p>
+                </div>
+                <div class="hero-metric">
+                    <span class="hero-metric__label">Recommended Path</span>
+                    <strong>Embed first, serve second</strong>
+                    <p>The core library is the product. The server is an optional transport layer over the same storage and query surfaces.</p>
+                </div>
+            </div>
+        </section>
+        <section class="content-panel prose prose--docs">
+<h1 id="getting-started">Getting Started</h1>
+<p>Repository: <a href="https://github.com/xgeoff/nexum">github.com/xgeoff/nexum</a></p>
+<p>This guide covers:</p>
+<ol>
+<li>building the Nexum artifacts</li>
+<li>using the core library directly</li>
+<li>using all three data-access modes: graph, relational, and object</li>
+<li>running the provided Micronaut server</li>
+<li>embedding Nexum inside another server such as Spring Boot</li>
+<li>calling the sample HTTP API</li>
+</ol>
+<h2 id="build-the-artifacts">Build The Artifacts</h2>
+<p>Build the core library jar:</p>
+<pre><code class="language-bash">./gradlew :lib:jar
+</code></pre>
+<p>Build the optional server jar:</p>
+<pre><code class="language-bash">./gradlew :server:jar
+</code></pre>
+<p>Resulting artifacts:</p>
+<ul>
+<li>core library: <code>lib/build/libs/nexum.jar</code></li>
+<li>server: <code>server/build/libs/nexum-server.jar</code></li>
+</ul>
+<p>Run the full test suite:</p>
+<pre><code class="language-bash">./gradlew test
+</code></pre>
+<p>Run the benchmark harness:</p>
+<pre><code class="language-bash">./gradlew :lib:benchmark
+</code></pre>
+<h2 id="use-the-core-library-directly">Use The Core Library Directly</h2>
+<p>If you are working inside this repository, depend on the module directly:</p>
+<pre><code class="language-gradle">dependencies {
+    implementation(project(":lib"))
+}
+</code></pre>
+<p>If you want to consume the built jar from another Gradle project, copy <code>nexum.jar</code> into that project and wire it explicitly:</p>
+<pre><code class="language-gradle">dependencies {
+    implementation(files("libs/nexum.jar"))
+}
+</code></pre>
+<p>For Maven, the same local-jar approach looks like:</p>
+<pre><code class="language-xml">&lt;dependency&gt;
+  &lt;groupId&gt;local.nexum&lt;/groupId&gt;
+  &lt;artifactId&gt;nexum&lt;/artifactId&gt;
+  &lt;version&gt;0&lt;/version&gt;
+  &lt;scope&gt;system&lt;/scope&gt;
+  &lt;systemPath&gt;${project.basedir}/libs/nexum.jar&lt;/systemPath&gt;
+&lt;/dependency&gt;
+</code></pre>
+<p>That <code>systemPath</code> pattern is only appropriate for local evaluation. If you plan to reuse Nexum across projects, publish the jar into your internal Maven repository instead of hard-wiring local file paths.</p>
+<h2 id="graph-mode">Graph Mode</h2>
+<p>Use the graph facade when you want nodes, edges, and traversal directly from the embedded library.</p>
+<pre><code class="language-java">import biz.digitalindustry.storage.graph.api.GraphStore;
+import biz.digitalindustry.storage.graph.engine.NativeGraphStore;
+
+try (GraphStore graph = NativeGraphStore.fileBacked("./data/graph.dbs")) {
+    graph.upsertNode("alice", "Person");
+    graph.upsertNode("bob", "Person");
+    graph.connectNodes("alice", "Person", "bob", "Person", "KNOWS", 1.0d);
+
+    var neighbors = graph.getOutgoingNeighbors("alice", "KNOWS");
+    System.out.println(neighbors.size());
+}
+</code></pre>
+<p>Memory-only mode:</p>
+<pre><code class="language-java">try (GraphStore graph = NativeGraphStore.memoryOnly()) {
+    graph.upsertNode("alice", "Person");
+}
+</code></pre>
+<p>Key references:</p>
+<ul>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/graph/api/GraphStore.java"><code>GraphStore.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/graph/engine/NativeGraphStore.java"><code>NativeGraphStore.java</code></a></li>
+</ul>
+<h2 id="relational-mode">Relational Mode</h2>
+<p>Use the relational facade when you want explicit tables, rows, and exact or range lookup.</p>
+<pre><code class="language-java">import biz.digitalindustry.storage.model.LongValue;
+import biz.digitalindustry.storage.model.StringValue;
+import biz.digitalindustry.storage.relational.api.Row;
+import biz.digitalindustry.storage.relational.api.TableDefinition;
+import biz.digitalindustry.storage.relational.engine.NativeRelationalStore;
+
+import java.util.Map;
+
+try (var store = NativeRelationalStore.fileBacked("./data/relational.dbs")) {
+    store.registerTable(usersTable);
+
+    store.upsert(usersTable, new Row("u1", Map.of(
+            "id", new StringValue("u1"),
+            "name", new StringValue("Ada"),
+            "age", new LongValue(37)
+    )));
+
+    Row row = store.get(usersTable, "u1");
+    System.out.println(row.fields().get("name"));
+}
+</code></pre>
+<p>Key references:</p>
+<ul>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/relational/api/RelationalStore.java"><code>RelationalStore.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/relational/api/TableDefinition.java"><code>TableDefinition.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/relational/engine/NativeRelationalStore.java"><code>NativeRelationalStore.java</code></a></li>
+</ul>
+<h2 id="object-mode">Object Mode</h2>
+<p>Use the object facade when you want typed persistence with explicit codecs instead of reflective mapping.</p>
+<pre><code class="language-java">import biz.digitalindustry.storage.object.api.ObjectCodec;
+import biz.digitalindustry.storage.object.api.ObjectType;
+import biz.digitalindustry.storage.object.engine.NativeObjectStore;
+
+try (var store = NativeObjectStore.fileBacked("./data/object.dbs")) {
+    store.registerType(personType);
+    store.save(personType, new Person("person-1", "Ada"));
+
+    var loaded = store.get(personType, "person-1");
+    System.out.println(loaded.value().name());
+}
+</code></pre>
+<p>Key references:</p>
+<ul>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectStore.java"><code>ObjectStore.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectCodec.java"><code>ObjectCodec.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/engine/NativeObjectStore.java"><code>NativeObjectStore.java</code></a></li>
+</ul>
+<h2 id="use-the-query-providers-directly">Use The Query Providers Directly</h2>
+<p>If you want query strings without the HTTP server, embed the query providers over the graph or relational facades:</p>
+<pre><code class="language-java">import biz.digitalindustry.storage.graph.engine.NativeGraphStore;
+import biz.digitalindustry.storage.query.cypher.CypherQueryProvider;
+import biz.digitalindustry.storage.query.sql.SqlQueryProvider;
+import biz.digitalindustry.storage.relational.engine.NativeRelationalStore;
+
+var graph = NativeGraphStore.fileBacked("./data/query-graph.dbs");
+var relational = NativeRelationalStore.fileBacked("./data/query-relational.dbs");
+
+var cypher = new CypherQueryProvider(graph);
+var sql = new SqlQueryProvider(relational);
+</code></pre>
+<p>This is the lightest way to expose query strings inside your own application without bringing in the Nexum server module.</p>
+<h2 id="run-the-provided-server">Run The Provided Server</h2>
+<p>Start the server against file-backed stores:</p>
+<pre><code class="language-bash">./gradlew :server:run   -Dgraph.db.path=./data/nexum-graph.dbs   -Drelational.db.path=./data/nexum-relational.dbs
+</code></pre>
+<p>Run it in memory-only mode:</p>
+<pre><code class="language-bash">./gradlew :server:run   -Dgraph.db.mode=memory   -Drelational.db.mode=memory
+</code></pre>
+<p>Useful properties:</p>
+<ul>
+<li><code>graph.db.mode=file|memory</code></li>
+<li><code>graph.db.path=./data/nexum-graph.dbs</code></li>
+<li><code>graph.db.page-size=8192</code></li>
+<li><code>graph.db.max-wal-bytes=536870912</code></li>
+<li><code>graph.db.checkpoint-on-close=true</code></li>
+<li><code>relational.db.mode=file|memory</code></li>
+<li><code>relational.db.path=./data/nexum-relational.dbs</code></li>
+<li><code>relational.db.page-size=8192</code></li>
+<li><code>relational.db.max-wal-bytes=536870912</code></li>
+<li><code>relational.db.checkpoint-on-close=true</code></li>
+</ul>
+<h2 id="embed-nexum-in-spring-boot">Embed Nexum In Spring Boot</h2>
+<p>If you already have a Spring Boot application, the usual pattern is:</p>
+<ol>
+<li>add <code>nexum.jar</code> to your application dependencies</li>
+<li>create Nexum stores as Spring beans</li>
+<li>inject those stores into your own controllers or services</li>
+<li>optionally wrap them with your own REST API instead of using the Micronaut server module</li>
+</ol>
+<p>Example configuration:</p>
+<pre><code class="language-java">package com.example.demo;
+
+import biz.digitalindustry.storage.graph.api.GraphStore;
+import biz.digitalindustry.storage.graph.engine.NativeGraphStore;
+import biz.digitalindustry.storage.relational.api.RelationalStore;
+import biz.digitalindustry.storage.relational.engine.NativeRelationalStore;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+class NexumConfig {
+
+    @Bean(destroyMethod = "close")
+    GraphStore graphStore() {
+        return NativeGraphStore.fileBacked("./data/spring-graph.dbs");
+    }
+
+    @Bean(destroyMethod = "close")
+    RelationalStore relationalStore() {
+        return NativeRelationalStore.fileBacked("./data/spring-relational.dbs");
+    }
+}
+</code></pre>
+<p>Example controller:</p>
+<pre><code class="language-java">package com.example.demo;
+
+import biz.digitalindustry.storage.graph.api.GraphStore;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+class GraphController {
+    private final GraphStore graphStore;
+
+    GraphController(GraphStore graphStore) {
+        this.graphStore = graphStore;
+    }
+
+    @GetMapping("/graph/node-count")
+    int nodeCount() {
+        return graphStore.getAllNodes().size();
+    }
+}
+</code></pre>
+<p>That approach keeps Nexum embedded inside your preferred HTTP framework while avoiding an extra server layer.</p>
+<h2 id="call-the-sample-server-api">Call The Sample Server API</h2>
+<p>Create a graph node:</p>
+<pre><code class="language-bash">curl -X POST http://localhost:8080/query   -H 'Content-Type: application/json'   -d '{ "cypher": "CREATE (n:Person {id:'''alice'''})" }'
+</code></pre>
+<p>Read graph nodes:</p>
+<pre><code class="language-bash">curl -X POST http://localhost:8080/query   -H 'Content-Type: application/json'   -d '{ "cypher": "MATCH (n) RETURN n" }'
+</code></pre>
+<p>Create a relational table:</p>
+<pre><code class="language-bash">curl -X POST http://localhost:8080/query   -H 'Content-Type: application/json'   -d '{ "sql": "CREATE TABLE users (id STRING PRIMARY KEY, name STRING NOT NULL, age LONG NOT NULL, active BOOLEAN NOT NULL)" }'
+</code></pre>
+<p>Insert a relational row:</p>
+<pre><code class="language-bash">curl -X POST http://localhost:8080/query   -H 'Content-Type: application/json'   -d '{ "sql": "INSERT INTO users (id, name, age, active) VALUES ('''u1''', '''Ada''', 37, true)" }'
+</code></pre>
+<p>Read relational rows:</p>
+<pre><code class="language-bash">curl -X POST http://localhost:8080/query   -H 'Content-Type: application/json'   -d '{ "sql": "SELECT * FROM users WHERE id = '''u1'''" }'
+</code></pre>
+<p>Inspect maintenance status:</p>
+<pre><code class="language-bash">curl http://localhost:8080/admin/maintenance
+</code></pre>
+<p>Trigger a checkpoint:</p>
+<pre><code class="language-bash">curl -X POST http://localhost:8080/admin/maintenance/checkpoint
+</code></pre>
+<h2 id="choosing-a-path">Choosing A Path</h2>
+<p>Choose the core library directly when:</p>
+<ul>
+<li>you are embedding Nexum into another JVM application</li>
+<li>you want the smallest runtime surface</li>
+<li>you want direct control over lifecycle and API design</li>
+</ul>
+<p>Choose the provided server when:</p>
+<ul>
+<li>you need a ready-made HTTP transport quickly</li>
+<li>the built-in query subset is enough for your use case</li>
+<li>you want operational endpoints for maintenance out of the box</li>
+</ul>
+<p>Choose embedding inside another server such as Spring Boot when:</p>
+<ul>
+<li>you already have an application platform and API layer</li>
+<li>you want Nexum storage without committing to the Micronaut server artifact</li>
+<li>you need your own authentication, routing, or domain-specific API surface</li>
+</ul>
+
+        </section>
+    </main>
+</div>
+</body>
+</html>
