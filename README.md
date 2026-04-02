@@ -161,6 +161,7 @@ See [`server-query-guide.md`](site/pages/server-query-guide.md) for the exact su
 ## Docs
 
 - [`getting-started.md`](site/pages/getting-started.md)
+- [`object-query-api-design.md`](site/pages/object-query-api-design.md)
 - [`architecture.md`](site/pages/architecture.md)
 - [`unified-engine-model.md`](site/pages/unified-engine-model.md)
 - [`concurrency-model.md`](site/pages/concurrency-model.md)

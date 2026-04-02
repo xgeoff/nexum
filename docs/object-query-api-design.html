@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Object Query API Design</title>
+    <meta name="description" content="Proposed evolution of the unified /query endpoint to support object operations through structured JSON payloads while preserving the provider model.">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/normalize.css">
+    <link rel="stylesheet" href="css/skeleton.css">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" type="image/png" href="images/favicon-32.png">
+</head>
+<body class="theme-shell theme-docs">
+<div class="shell">
+    <div class="sidebar">
+    <div class="sidebar__brand">
+        <a class="sidebar__brand-link" href="/nexum">
+            <span class="sidebar__mark"></span>
+            <span>
+                <strong>Nexum</strong>
+                <small>Native database</small>
+            </span>
+        </a>
+    </div>
+    <p class="sidebar__tagline">A modern, high-performance database built around one native storage core.</p>
+    <p class="sidebar__tagline"><a href="https://github.com/xgeoff/nexum">github.com/xgeoff/nexum</a></p>
+    <nav class="sidebar__nav">
+        <p class="sidebar__section-title">Documentation</p>
+        <ul>
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/nexum/architecture.html">Architecture</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/nexum/concurrency-model.html">Concurrency Model</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/nexum/getting-started.html">Getting Started</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/nexum/index.html">Overview</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/nexum/object-facade.html">Object Facade</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/nexum/object-query-api-design.html">Object Query Api Design</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/nexum/relational-facade.html">Relational Facade</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/nexum/server-query-guide.html">Server Query Guide</a></li>
+
+
+        
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/nexum/unified-engine-model.html">Unified Engine Model</a></li>
+
+
+        
+        </ul>
+    </nav>
+</div>
+
+    <main class="page-frame">
+        <section class="hero-panel hero-panel--query">
+            <p class="eyebrow">API Design</p>
+            <h1>Object Query API Design</h1>
+            <p class="hero-copy">Keep the elegant provider-dispatch model, but evolve provider payloads from plain strings to JSON objects so object storage can be exposed cleanly through the same /query endpoint.</p>
+            <div class="query-banner">
+                <span>Cypher -> graph facade</span>
+                <span>SQL -> relational facade</span>
+                <span>Server -> transport only</span>
+            </div>
+        </section>
+        <section class="content-panel prose prose--docs prose--query">
+<h1 id="object-query-api-design">Object Query API Design</h1>
+<p>Status: proposed server API evolution</p>
+<p>Repository: <a href="https://github.com/xgeoff/nexum">github.com/xgeoff/nexum</a></p>
+<p>This document proposes how Nexum can add object operations to the server without abandoning the current provider model.</p>
+<h2 id="goals">Goals</h2>
+<ul>
+<li>preserve the single <code>POST /query</code> entry point</li>
+<li>preserve provider dispatch by top-level key</li>
+<li>retain compatibility with existing <code>sql</code> and <code>cypher</code> callers</li>
+<li>support object operations with structured JSON rather than string DSLs</li>
+<li>keep the API narrow, explicit, and compatible with the current typed object facade</li>
+</ul>
+<h2 id="current-shape">Current Shape</h2>
+<p>Today the request shape is:</p>
+<pre><code class="language-json">{ "sql": "SELECT * FROM users" }
+</code></pre>
+<p>or:</p>
+<pre><code class="language-json">{ "cypher": "MATCH (n) RETURN n" }
+</code></pre>
+<p>That is elegant, but too restrictive for object storage because object operations need structured payloads for actions such as type registration, document writes, and selectors.</p>
+<h2 id="proposed-shape">Proposed Shape</h2>
+<p>The top-level request remains a single-entry object:</p>
+<pre><code class="language-json">{ "&lt;provider&gt;": &lt;provider-payload&gt; }
+</code></pre>
+<p>The provider payload becomes:</p>
+<ul>
+<li>either a string, for backward compatibility</li>
+<li>or a JSON object, which becomes the canonical shape going forward</li>
+</ul>
+<p>Canonical examples:</p>
+<pre><code class="language-json">{ "sql": { "queryText": "SELECT * FROM users" } }
+</code></pre>
+<pre><code class="language-json">{ "cypher": { "queryText": "MATCH (n) RETURN n" } }
+</code></pre>
+<pre><code class="language-json">{
+  "object": {
+    "action": "get",
+    "type": "person",
+    "key": "person-1"
+  }
+}
+</code></pre>
+<h2 id="backward-compatibility">Backward Compatibility</h2>
+<p>The server should continue accepting the current string form:</p>
+<pre><code class="language-json">{ "sql": "SELECT * FROM users" }
+</code></pre>
+<p>and normalize it internally to:</p>
+<pre><code class="language-json">{ "sql": { "queryText": "SELECT * FROM users" } }
+</code></pre>
+<p>The same rule applies to <code>cypher</code>.</p>
+<p>This gives Nexum:</p>
+<ul>
+<li>no immediate break for existing clients</li>
+<li>one canonical internal request model</li>
+<li>room for richer provider payloads later</li>
+</ul>
+<h2 id="normalization-rules">Normalization Rules</h2>
+<p>For every request:</p>
+<ol>
+<li>the JSON body must contain exactly one top-level key</li>
+<li>the key is the provider name, such as <code>sql</code>, <code>cypher</code>, or <code>object</code></li>
+<li>if the value is a string, normalize it to <code>{ "queryText": "&lt;value&gt;" }</code></li>
+<li>if the value is an object, pass it through as provider payload</li>
+<li>any other payload type is a <code>400 Bad Request</code></li>
+</ol>
+<p>Example invalid requests:</p>
+<pre><code class="language-json">{ "sql": 42 }
+</code></pre>
+<pre><code class="language-json">{ "sql": { "queryText": "SELECT * FROM users" }, "cypher": { "queryText": "MATCH (n) RETURN n" } }
+</code></pre>
+<h2 id="provider-contract">Provider Contract</h2>
+<p>The current <code>QueryProvider</code> contract is string-based. To support normalized provider payloads cleanly, the provider boundary should evolve from:</p>
+<pre><code class="language-java">String queryType();
+QueryResult execute(String query);
+</code></pre>
+<p>to something like:</p>
+<pre><code class="language-java">String queryType();
+QueryResult execute(QueryCommand command);
+</code></pre>
+<p>Where <code>QueryCommand</code> represents:</p>
+<ul>
+<li>provider name</li>
+<li>normalized payload object</li>
+</ul>
+<p>Conceptually:</p>
+<pre><code class="language-java">public record QueryCommand(
+        String queryType,
+        Map&lt;String, Object&gt; payload
+) {}
+</code></pre>
+<p>That keeps the registry/provider architecture intact while making payloads extensible.</p>
+<h2 id="sql-provider-payload">SQL Provider Payload</h2>
+<p>First version:</p>
+<pre><code class="language-json">{
+  "sql": {
+    "queryText": "SELECT * FROM users"
+  }
+}
+</code></pre>
+<p>Possible future extension:</p>
+<pre><code class="language-json">{
+  "sql": {
+    "queryText": "SELECT * FROM users WHERE id = ?",
+    "params": ["u1"]
+  }
+}
+</code></pre>
+<p>For now, only <code>queryText</code> is required.</p>
+<h2 id="cypher-provider-payload">Cypher Provider Payload</h2>
+<p>First version:</p>
+<pre><code class="language-json">{
+  "cypher": {
+    "queryText": "MATCH (n) RETURN n"
+  }
+}
+</code></pre>
+<p>Possible future extension could mirror SQL with additional options, but the first cut should stay narrow.</p>
+<h2 id="object-provider-payload">Object Provider Payload</h2>
+<p>The object provider should be JSON-native and action-oriented.</p>
+<p>Recommended first actions:</p>
+<ul>
+<li><code>registerType</code></li>
+<li><code>put</code></li>
+<li><code>get</code></li>
+<li><code>delete</code></li>
+<li><code>scan</code></li>
+<li><code>find</code></li>
+</ul>
+<h3 id="register-type">Register Type</h3>
+<pre><code class="language-json">{
+  "object": {
+    "action": "registerType",
+    "type": "person",
+    "definition": {
+      "keyField": "id",
+      "fields": {
+        "id": { "type": "string", "required": true },
+        "name": { "type": "string", "required": true },
+        "age": { "type": "long", "required": false },
+        "active": { "type": "boolean", "required": false }
+      },
+      "indexes": [
+        { "name": "person_name_idx", "kind": "non_unique", "fields": ["name"] },
+        { "name": "person_age_idx", "kind": "ordered_range", "fields": ["age"] }
+      ]
+    }
+  }
+}
+</code></pre>
+<p>Semantics:</p>
+<ul>
+<li>registers a server-known object type called <code>person</code></li>
+<li>synthesizes a Nexum <code>ObjectType</code></li>
+<li>persists the type through the engine schema layer</li>
+<li>makes future <code>person</code> document operations valid</li>
+</ul>
+<h3 id="put-document">Put Document</h3>
+<pre><code class="language-json">{
+  "object": {
+    "action": "put",
+    "type": "person",
+    "key": "person-1",
+    "document": {
+      "id": "person-1",
+      "name": "Ada",
+      "age": 37,
+      "active": true
+    }
+  }
+}
+</code></pre>
+<p>Semantics:</p>
+<ul>
+<li>validates the document against the registered type</li>
+<li>converts JSON fields to Nexum <code>FieldValue</code> instances</li>
+<li>saves or replaces the stored object</li>
+</ul>
+<h3 id="get-document">Get Document</h3>
+<pre><code class="language-json">{
+  "object": {
+    "action": "get",
+    "type": "person",
+    "key": "person-1"
+  }
+}
+</code></pre>
+<h3 id="delete-document">Delete Document</h3>
+<pre><code class="language-json">{
+  "object": {
+    "action": "delete",
+    "type": "person",
+    "key": "person-1"
+  }
+}
+</code></pre>
+<h3 id="scan-documents">Scan Documents</h3>
+<pre><code class="language-json">{
+  "object": {
+    "action": "scan",
+    "type": "person"
+  }
+}
+</code></pre>
+<h3 id="find-documents">Find Documents</h3>
+<p>First version should stay narrow and support exact-match selectors only:</p>
+<pre><code class="language-json">{
+  "object": {
+    "action": "find",
+    "type": "person",
+    "selector": {
+      "name": { "eq": "Ada" }
+    }
+  }
+}
+</code></pre>
+<p>That gives a CouchDB-like feel without overpromising query semantics that the current object facade does not yet expose.</p>
+<p>For v1, the selector grammar should be intentionally strict:</p>
+<ul>
+<li><code>selector</code> must be a JSON object</li>
+<li><code>selector</code> must contain exactly one field name</li>
+<li>that field must contain exactly one operator</li>
+<li>the only supported v1 operator is <code>eq</code></li>
+</ul>
+<p>Valid example:</p>
+<pre><code class="language-json">{
+  "object": {
+    "action": "find",
+    "type": "person",
+    "selector": {
+      "name": { "eq": "Ada" }
+    }
+  }
+}
+</code></pre>
+<p>Invalid because it tries to match multiple fields in one request:</p>
+<pre><code class="language-json">{
+  "object": {
+    "action": "find",
+    "type": "person",
+    "selector": {
+      "name": { "eq": "Ada" },
+      "active": { "eq": true }
+    }
+  }
+}
+</code></pre>
+<p>Invalid because it tries to stack operators on one field:</p>
+<pre><code class="language-json">{
+  "object": {
+    "action": "find",
+    "type": "person",
+    "selector": {
+      "name": {
+        "eq": "Ada",
+        "prefix": "Ad"
+      }
+    }
+  }
+}
+</code></pre>
+<p>This is the best first shape because it is easy to validate, easy to explain, and directly aligned with the exact-match lookup capabilities the object facade already implies. If Nexum later adds richer object query semantics, the most natural extension would be multi-field <code>AND</code> matching, but that should not be part of the first server contract.</p>
+<h3 id="patch-document">Patch Document</h3>
+<p>If partial update support is added later, it should be modeled as a separate action rather than folded into <code>put</code>:</p>
+<pre><code class="language-json">{
+  "object": {
+    "action": "patch",
+    "type": "person",
+    "key": "person-1",
+    "patch": {
+      "set": {
+        "name": "Ada Lovelace",
+        "active": true
+      },
+      "inc": {
+        "loginCount": 1
+      }
+    }
+  }
+}
+</code></pre>
+<p>That keeps full-document replacement and partial mutation clearly separated.</p>
+<h2 id="why-action-based-object-payloads">Why Action-Based Object Payloads</h2>
+<p>This is intentionally closer to DynamoDB-style operations than to a freeform string query language.</p>
+<p>Reasons:</p>
+<ul>
+<li>the current object facade is typed and explicit</li>
+<li>object operations are not naturally text-query shaped</li>
+<li>type registration must be structured</li>
+<li>validation and field typing are easier to define in JSON than in a custom DSL</li>
+</ul>
+<p>The resulting HTTP experience still feels document-oriented and pleasant to use, especially when combined with stable keys and JSON documents.</p>
+<h2 id="object-type-registration-model">Object Type Registration Model</h2>
+<p>The object server layer should own a registry of exposed object types.</p>
+<p>That registry should:</p>
+<ul>
+<li>map external type names such as <code>person</code></li>
+<li>keep the registered field definitions and index definitions</li>
+<li>synthesize the Nexum-side <code>ObjectType</code></li>
+<li>perform JSON-to-<code>FieldValue</code> conversions</li>
+<li>perform <code>FieldValue</code>-to-JSON conversions on reads</li>
+</ul>
+<p>This avoids forcing external clients to know about Java codecs while preserving explicit schemas under the hood.</p>
+<h2 id="reference-fields">Reference Fields</h2>
+<p>If object references are exposed, keep them explicit in JSON.</p>
+<p>Recommended shape:</p>
+<pre><code class="language-json">{
+  "addressRef": {
+    "type": "address",
+    "key": "addr-1"
+  }
+}
+</code></pre>
+<p>That maps cleanly to Nexum <code>ReferenceValue</code> semantics while staying readable for API clients.</p>
+<h2 id="object-action-contracts">Object Action Contracts</h2>
+<p>The first implementation should define each <code>object</code> action as a strict request contract with a predictable response shape.</p>
+<h3 id="common-request-rules">Common Request Rules</h3>
+<p>Every object request payload:</p>
+<ul>
+<li>must be a JSON object</li>
+<li>must contain <code>action</code></li>
+<li>must contain <code>type</code></li>
+<li>may only contain fields defined for that action</li>
+<li>should fail with <code>400 Bad Request</code> if unknown top-level fields are present</li>
+</ul>
+<p>Base shape:</p>
+<pre><code class="language-json">{
+  "object": {
+    "action": "&lt;action-name&gt;",
+    "type": "&lt;registered-type&gt;"
+  }
+}
+</code></pre>
+<h3 id="registertype"><code>registerType</code></h3>
+<p>Request fields:</p>
+<ul>
+<li>required: <code>action</code>, <code>type</code>, <code>definition</code></li>
+<li>optional: none</li>
+</ul>
+<p><code>definition</code> fields:</p>
+<ul>
+<li>required: <code>keyField</code>, <code>fields</code></li>
+<li>optional: <code>indexes</code></li>
+</ul>
+<p>Success response:</p>
+<pre><code class="language-json">{
+  "results": [
+    {
+      "result": {
+        "id": "person",
+        "properties": {
+          "entityType": "objectType",
+          "type": "person",
+          "registered": true,
+          "keyField": "id"
+        }
+      }
+    }
+  ]
+}
+</code></pre>
+<p>Failure cases:</p>
+<ul>
+<li><code>type</code> already exists with incompatible shape</li>
+<li><code>keyField</code> does not reference a defined field</li>
+<li>field definitions use unsupported types</li>
+<li>index definitions reference unknown fields</li>
+</ul>
+<h3 id="put"><code>put</code></h3>
+<p>Request fields:</p>
+<ul>
+<li>required: <code>action</code>, <code>type</code>, <code>key</code>, <code>document</code></li>
+<li>optional: none</li>
+</ul>
+<p>Rules:</p>
+<ul>
+<li><code>key</code> must match the logical identity of the document</li>
+<li><code>document</code> must conform to the registered schema</li>
+<li>if the key field is present inside <code>document</code>, it should match <code>key</code></li>
+<li><code>put</code> is a full-document write, not a partial merge</li>
+</ul>
+<p>Success response:</p>
+<pre><code class="language-json">{
+  "results": [
+    {
+      "result": {
+        "id": "person-1",
+        "properties": {
+          "entityType": "object",
+          "type": "person",
+          "stored": true
+        }
+      }
+    }
+  ]
+}
+</code></pre>
+<p>Failure cases:</p>
+<ul>
+<li>unknown object type</li>
+<li>missing required fields</li>
+<li>field value does not match the registered type</li>
+<li><code>key</code> conflicts with the document identity field</li>
+</ul>
+<h3 id="get"><code>get</code></h3>
+<p>Request fields:</p>
+<ul>
+<li>required: <code>action</code>, <code>type</code>, <code>key</code></li>
+<li>optional: none</li>
+</ul>
+<p>Success response:</p>
+<pre><code class="language-json">{
+  "results": [
+    {
+      "object": {
+        "id": "person-1",
+        "properties": {
+          "entityType": "object",
+          "type": "person",
+          "document": {
+            "id": "person-1",
+            "name": "Ada",
+            "age": 37
+          }
+        }
+      }
+    }
+  ]
+}
+</code></pre>
+<p>Recommended missing-document behavior:</p>
+<ul>
+<li>return <code>results: []</code> when the key is not found</li>
+</ul>
+<h3 id="delete"><code>delete</code></h3>
+<p>Request fields:</p>
+<ul>
+<li>required: <code>action</code>, <code>type</code>, <code>key</code></li>
+<li>optional: none</li>
+</ul>
+<p>Success response:</p>
+<pre><code class="language-json">{
+  "results": [
+    {
+      "result": {
+        "id": "person-1",
+        "properties": {
+          "entityType": "object",
+          "type": "person",
+          "deleted": true
+        }
+      }
+    }
+  ]
+}
+</code></pre>
+<p>Recommended missing-document behavior:</p>
+<ul>
+<li>deleting a missing key should still return success with <code>deleted: false</code></li>
+</ul>
+<h3 id="scan"><code>scan</code></h3>
+<p>Request fields:</p>
+<ul>
+<li>required: <code>action</code>, <code>type</code></li>
+<li>optional: none in v1</li>
+</ul>
+<p>Success response:</p>
+<pre><code class="language-json">{
+  "results": [
+    {
+      "object": {
+        "id": "person-1",
+        "properties": {
+          "entityType": "object",
+          "type": "person",
+          "document": {
+            "id": "person-1",
+            "name": "Ada"
+          }
+        }
+      }
+    },
+    {
+      "object": {
+        "id": "person-2",
+        "properties": {
+          "entityType": "object",
+          "type": "person",
+          "document": {
+            "id": "person-2",
+            "name": "Grace"
+          }
+        }
+      }
+    }
+  ]
+}
+</code></pre>
+<p>Rules:</p>
+<ul>
+<li><code>scan</code> returns all stored documents for the registered type</li>
+<li>ordering should be considered unspecified in v1</li>
+<li>pagination is not part of the first contract</li>
+</ul>
+<h3 id="find"><code>find</code></h3>
+<p>Request fields:</p>
+<ul>
+<li>required: <code>action</code>, <code>type</code>, <code>selector</code></li>
+<li>optional: none in v1</li>
+</ul>
+<p>Selector rules:</p>
+<ul>
+<li><code>selector</code> must contain exactly one field</li>
+<li>that field must contain exactly one operator</li>
+<li>the only supported v1 operator is <code>eq</code></li>
+</ul>
+<p>Success response:</p>
+<pre><code class="language-json">{
+  "results": [
+    {
+      "object": {
+        "id": "person-1",
+        "properties": {
+          "entityType": "object",
+          "type": "person",
+          "document": {
+            "id": "person-1",
+            "name": "Ada"
+          }
+        }
+      }
+    }
+  ]
+}
+</code></pre>
+<p>Rules:</p>
+<ul>
+<li>if the target field is indexed, the provider should prefer the index path</li>
+<li>if the target field is not indexed, the provider may fall back to scanning</li>
+<li>empty matches should return <code>results: []</code></li>
+</ul>
+<h3 id="patch"><code>patch</code></h3>
+<p><code>patch</code> should remain a planned extension rather than a first-version action.</p>
+<p>If it is added later, request fields should be:</p>
+<ul>
+<li>required: <code>action</code>, <code>type</code>, <code>key</code>, <code>patch</code></li>
+<li>optional: none</li>
+</ul>
+<p>Supported patch operators should be limited to:</p>
+<ul>
+<li><code>set</code></li>
+<li><code>inc</code></li>
+</ul>
+<p>Recommended success response:</p>
+<pre><code class="language-json">{
+  "results": [
+    {
+      "result": {
+        "id": "person-1",
+        "properties": {
+          "entityType": "object",
+          "type": "person",
+          "patched": true
+        }
+      }
+    }
+  ]
+}
+</code></pre>
+<h2 id="response-shape">Response Shape</h2>
+<p>The current server already uses:</p>
+<pre><code class="language-json">{
+  "results": [
+    {
+      "row": {
+        "id": "u1",
+        "properties": {
+          "entityType": "row",
+          "name": "Ada"
+        }
+      }
+    }
+  ]
+}
+</code></pre>
+<p>To stay compatible and intentional, object results should fit the same envelope:</p>
+<pre><code class="language-json">{
+  "results": [
+    {
+      "object": {
+        "id": "person-1",
+        "properties": {
+          "entityType": "object",
+          "type": "person",
+          "document": {
+            "id": "person-1",
+            "name": "Ada",
+            "age": 37
+          }
+        }
+      }
+    }
+  ]
+}
+</code></pre>
+<p>For mutations:</p>
+<pre><code class="language-json">{
+  "results": [
+    {
+      "result": {
+        "id": "person-1",
+        "properties": {
+          "entityType": "object",
+          "type": "person",
+          "stored": true
+        }
+      }
+    }
+  ]
+}
+</code></pre>
+<p>This preserves the current <code>results[]</code> convention while allowing object payloads to carry document bodies.</p>
+<h2 id="error-handling">Error Handling</h2>
+<p>Object operations should match the current server behavior and return <code>400 Bad Request</code> for:</p>
+<ul>
+<li>unknown provider name</li>
+<li>malformed payload</li>
+<li>unknown object action</li>
+<li>unknown type</li>
+<li>invalid field name</li>
+<li>invalid field type</li>
+<li>missing required field</li>
+<li>selector shapes not supported by the current implementation</li>
+</ul>
+<p>That keeps object behavior compatible with current SQL/Cypher request validation.</p>
+<h2 id="operator-semantics">Operator Semantics</h2>
+<p>The operator vocabulary should stay very small and be documented explicitly.</p>
+<h3 id="selector-operators">Selector Operators</h3>
+<h4 id="eq"><code>eq</code></h4>
+<p>Exact-match comparison for a single field.</p>
+<p>Example:</p>
+<pre><code class="language-json">{
+  "selector": {
+    "name": { "eq": "Ada" }
+  }
+}
+</code></pre>
+<p>Rules:</p>
+<ol>
+<li><code>selector</code> must be a JSON object</li>
+<li>each key inside <code>selector</code> is a field name</li>
+<li>for v1, exactly one field selector should be accepted</li>
+<li>for v1, each field may specify only one operator</li>
+<li><code>eq</code> means exact field equality</li>
+<li>if the field is indexed, the provider should use the exact-match index path</li>
+<li>if the field is not indexed, the provider may fall back to scanning that registered type</li>
+</ol>
+<p>Supported field types:</p>
+<ul>
+<li><code>string</code></li>
+<li><code>long</code></li>
+<li><code>double</code></li>
+<li><code>boolean</code></li>
+<li><code>reference</code></li>
+</ul>
+<p>Reference values should not introduce a separate <code>ref</code> operator. Instead, reference equality should be expressed through <code>eq</code> with a typed reference value:</p>
+<pre><code class="language-json">{
+  "selector": {
+    "addressRef": {
+      "eq": {
+        "type": "address",
+        "key": "addr-1"
+      }
+    }
+  }
+}
+</code></pre>
+<p>That keeps the operator vocabulary smaller while still supporting reference matching.</p>
+<h3 id="patch-operators">Patch Operators</h3>
+<p>Patch operators should only be valid inside the <code>patch</code> action payload.</p>
+<h4 id="set"><code>set</code></h4>
+<p>Replace one or more fields with supplied values.</p>
+<p>Example:</p>
+<pre><code class="language-json">{
+  "patch": {
+    "set": {
+      "name": "Ada Lovelace",
+      "active": true
+    }
+  }
+}
+</code></pre>
+<p>Rules:</p>
+<ol>
+<li><code>set</code> must be a JSON object mapping field names to values</li>
+<li>each assigned value must conform to the registered field type</li>
+<li>required-field constraints must still be satisfied after applying the patch</li>
+<li>the key field should be immutable through <code>patch</code></li>
+<li>reference fields should use the same typed value shape used by <code>eq</code></li>
+</ol>
+<h4 id="inc"><code>inc</code></h4>
+<p>Increment one or more numeric fields by the supplied numeric delta.</p>
+<p>Example:</p>
+<pre><code class="language-json">{
+  "patch": {
+    "inc": {
+      "loginCount": 1,
+      "balance": 12.5
+    }
+  }
+}
+</code></pre>
+<p>Rules:</p>
+<ol>
+<li><code>inc</code> must be a JSON object mapping field names to numeric deltas</li>
+<li><code>inc</code> is valid only for <code>long</code> and <code>double</code> fields</li>
+<li><code>inc</code> is invalid for <code>string</code>, <code>boolean</code>, and <code>reference</code> fields</li>
+<li>if the field is missing and the schema does not define a valid numeric default, the request should fail</li>
+<li>numeric overflow or invalid coercion should fail with <code>400 Bad Request</code></li>
+</ol>
+<h3 id="unknown-operators">Unknown Operators</h3>
+<p>Unknown operators should always fail fast with <code>400 Bad Request</code>.</p>
+<p>Invalid example:</p>
+<pre><code class="language-json">{
+  "selector": {
+    "name": { "prefix": "Ad" }
+  }
+}
+</code></pre>
+<p>That keeps the contract explicit and avoids accidental drift toward undocumented query semantics.</p>
+<h2 id="first-version-scope">First Version Scope</h2>
+<p>Recommended v1 scope:</p>
+<ul>
+<li><code>registerType</code></li>
+<li><code>put</code></li>
+<li><code>get</code></li>
+<li><code>delete</code></li>
+<li><code>scan</code></li>
+<li><code>find</code> with exact-match selectors only</li>
+<li><code>find</code> limited to exactly one field and one <code>eq</code> operator per request</li>
+</ul>
+<p>Not recommended for v1:</p>
+<ul>
+<li>schema-less documents</li>
+<li>arbitrary nested selectors</li>
+<li>multi-field selector matching</li>
+<li>partial update operators like <code>set</code> and <code>inc</code></li>
+<li>revision trees or CouchDB <code>_rev</code> semantics</li>
+<li>sort/limit/skip unless backed cleanly by the facade</li>
+</ul>
+<h2 id="why-this-looks-intentional">Why This Looks Intentional</h2>
+<p>This proposal keeps the best part of the current server API:</p>
+<ul>
+<li>one endpoint</li>
+<li>one provider key</li>
+<li>provider-dispatched execution</li>
+</ul>
+<p>But upgrades the payload contract so providers are no longer artificially limited to a single string.</p>
+<p>That gives Nexum:</p>
+<ul>
+<li><code>sql</code> and <code>cypher</code> for text-query providers</li>
+<li><code>object</code> for structured document operations</li>
+<li>one unified <code>/query</code> surface</li>
+<li>backward compatibility for current callers</li>
+</ul>
+<h2 id="summary">Summary</h2>
+<p>Recommended direction:</p>
+<ol>
+<li>keep <code>POST /query</code></li>
+<li>require exactly one top-level provider key</li>
+<li>normalize string payloads to <code>{ "queryText": ... }</code></li>
+<li>evolve providers to accept normalized JSON payloads</li>
+<li>add an <code>object</code> provider with action-oriented JSON requests</li>
+</ol>
+<p>This preserves the elegance of the current API while making object storage a first-class citizen of the same server contract.</p>
+
+        </section>
+    </main>
+</div>
+</body>
+</html>

@@ -26,6 +26,8 @@ The server routes:
 - `cypher` queries to the graph facade through `CypherQueryProvider`
 - `sql` queries to the relational facade through `SqlQueryProvider`
 
+See [`object-query-api-design.md`](/object-query-api-design.html) for the proposed evolution of this provider model toward structured JSON payloads and object operations.
+
 ## Request Shape
 
 Cypher-like:
