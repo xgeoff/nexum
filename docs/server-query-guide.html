@@ -26,6 +26,7 @@
         </a>
     </div>
     <p class="sidebar__tagline">A modern, high-performance database built around one native storage core.</p>
+    <p class="sidebar__tagline"><a href="https://github.com/xgeoff/nexum">github.com/xgeoff/nexum</a></p>
     <nav class="sidebar__nav">
         <p class="sidebar__section-title">Documentation</p>
         <ul>
@@ -108,7 +109,7 @@
         <section class="hero-panel hero-panel--query">
             <p class="eyebrow">Transport Guide</p>
             <h1>Server Query Guide</h1>
-            <p class="hero-copy">The built-in server is a narrow HTTP surface over app-owned query providers. Cypher routes into the graph facade and SQL routes into the relational facade.</p>
+            <p class="hero-copy">The built-in server is a narrow HTTP surface over lib-owned query providers. Cypher routes into the graph facade and SQL routes into the relational facade.</p>
             <div class="query-banner">
                 <span>Cypher -> graph facade</span>
                 <span>SQL -> relational facade</span>
@@ -118,7 +119,7 @@
         <section class="content-panel prose prose--docs prose--query">
 <h1 id="server-query-guide">Server Query Guide</h1>
 <p>This document describes the current native storage-backed query subset implemented by the Micronaut server.</p>
-<p>The server is only the HTTP transport layer. Query semantics live in the app module under <code>biz.digitalindustry.storage.query.*</code>.</p>
+<p>The server is only the HTTP transport layer. Query semantics live in the lib module under <code>biz.digitalindustry.storage.query.*</code>.</p>
 <p>Primary entry point:</p>
 <ul>
 <li><code>POST /query</code></li>

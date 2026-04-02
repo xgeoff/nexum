@@ -26,6 +26,7 @@
         </a>
     </div>
     <p class="sidebar__tagline">A modern, high-performance database built around one native storage core.</p>
+    <p class="sidebar__tagline"><a href="https://github.com/xgeoff/nexum">github.com/xgeoff/nexum</a></p>
     <nav class="sidebar__nav">
         <p class="sidebar__section-title">Documentation</p>
         <ul>
@@ -124,25 +125,26 @@
 <p>Status: active architecture</p>
 <p>Development policy: only the current native on-disk format is supported before first release.</p>
 <p>Nexum is built as a native embedded multi-model engine with one storage core and multiple façades.</p>
+<p>Repository: <a href="https://github.com/xgeoff/nexum">github.com/xgeoff/nexum</a></p>
 <h2 id="core-model">Core Model</h2>
 <p>Canonical storage concepts:</p>
 <ul>
-<li><a href="../app/src/main/java/biz/digitalindustry/storage/model/RecordId.java"><code>RecordId.java</code></a></li>
-<li><a href="../app/src/main/java/biz/digitalindustry/storage/model/Record.java"><code>Record.java</code></a></li>
-<li><a href="../app/src/main/java/biz/digitalindustry/storage/model/FieldValue.java"><code>FieldValue.java</code></a></li>
-<li><a href="../app/src/main/java/biz/digitalindustry/storage/model/ReferenceValue.java"><code>ReferenceValue.java</code></a></li>
-<li><a href="../app/src/main/java/biz/digitalindustry/storage/schema/EntityType.java"><code>EntityType.java</code></a></li>
-<li><a href="../app/src/main/java/biz/digitalindustry/storage/schema/IndexDefinition.java"><code>IndexDefinition.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/model/RecordId.java"><code>RecordId.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/model/Record.java"><code>Record.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/model/FieldValue.java"><code>FieldValue.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/model/ReferenceValue.java"><code>ReferenceValue.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/schema/EntityType.java"><code>EntityType.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/schema/IndexDefinition.java"><code>IndexDefinition.java</code></a></li>
 </ul>
 <p>The storage layer is record-oriented. Object, relational, and graph behavior are implemented as façades over the same primitives.</p>
 <h2 id="storage-engine">Storage Engine</h2>
 <p>Core runtime:</p>
 <ul>
-<li><a href="../app/src/main/java/biz/digitalindustry/storage/engine/NativeStorageEngine.java"><code>NativeStorageEngine.java</code></a></li>
-<li><a href="../app/src/main/java/biz/digitalindustry/storage/store/PageBackedRecordStore.java"><code>PageBackedRecordStore.java</code></a></li>
-<li><a href="../app/src/main/java/biz/digitalindustry/storage/engine/NativeIndexStore.java"><code>NativeIndexStore.java</code></a></li>
-<li><a href="../app/src/main/java/biz/digitalindustry/storage/page/PageFile.java"><code>PageFile.java</code></a></li>
-<li><a href="../app/src/main/java/biz/digitalindustry/storage/log/WriteAheadLog.java"><code>WriteAheadLog.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/engine/NativeStorageEngine.java"><code>NativeStorageEngine.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/store/PageBackedRecordStore.java"><code>PageBackedRecordStore.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/engine/NativeIndexStore.java"><code>NativeIndexStore.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/page/PageFile.java"><code>PageFile.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/log/WriteAheadLog.java"><code>WriteAheadLog.java</code></a></li>
 </ul>
 <p>Current engine properties:</p>
 <ul>
@@ -157,32 +159,32 @@
 <h2 id="facades">Facades</h2>
 <p>Object facade:</p>
 <ul>
-<li><a href="../app/src/main/java/biz/digitalindustry/storage/object/api/ObjectStore.java"><code>ObjectStore.java</code></a></li>
-<li><a href="../app/src/main/java/biz/digitalindustry/storage/object/api/ObjectType.java"><code>ObjectType.java</code></a></li>
-<li><a href="../app/src/main/java/biz/digitalindustry/storage/object/api/ObjectCodec.java"><code>ObjectCodec.java</code></a></li>
-<li><a href="../app/src/main/java/biz/digitalindustry/storage/object/engine/NativeObjectStore.java"><code>NativeObjectStore.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectStore.java"><code>ObjectStore.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectType.java"><code>ObjectType.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectCodec.java"><code>ObjectCodec.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/engine/NativeObjectStore.java"><code>NativeObjectStore.java</code></a></li>
 </ul>
 <p>Relational facade:</p>
 <ul>
-<li><a href="../app/src/main/java/biz/digitalindustry/storage/relational/api/RelationalStore.java"><code>RelationalStore.java</code></a></li>
-<li><a href="../app/src/main/java/biz/digitalindustry/storage/relational/api/TableDefinition.java"><code>TableDefinition.java</code></a></li>
-<li><a href="../app/src/main/java/biz/digitalindustry/storage/relational/api/Row.java"><code>Row.java</code></a></li>
-<li><a href="../app/src/main/java/biz/digitalindustry/storage/relational/engine/NativeRelationalStore.java"><code>NativeRelationalStore.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/relational/api/RelationalStore.java"><code>RelationalStore.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/relational/api/TableDefinition.java"><code>TableDefinition.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/relational/api/Row.java"><code>Row.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/relational/engine/NativeRelationalStore.java"><code>NativeRelationalStore.java</code></a></li>
 </ul>
 <p>Graph facade:</p>
 <ul>
-<li><a href="../app/src/main/java/biz/digitalindustry/storage/graph/api/GraphStore.java"><code>GraphStore.java</code></a></li>
-<li><a href="../app/src/main/java/biz/digitalindustry/storage/graph/model/GraphNodeRecord.java"><code>GraphNodeRecord.java</code></a></li>
-<li><a href="../app/src/main/java/biz/digitalindustry/storage/graph/model/GraphEdgeRecord.java"><code>GraphEdgeRecord.java</code></a></li>
-<li><a href="../app/src/main/java/biz/digitalindustry/storage/graph/engine/NativeGraphStore.java"><code>NativeGraphStore.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/graph/api/GraphStore.java"><code>GraphStore.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/graph/model/GraphNodeRecord.java"><code>GraphNodeRecord.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/graph/model/GraphEdgeRecord.java"><code>GraphEdgeRecord.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/graph/engine/NativeGraphStore.java"><code>NativeGraphStore.java</code></a></li>
 </ul>
 <h2 id="query-module">Query Module</h2>
 <p>Query providers live in the product layer, not the server layer.</p>
 <ul>
-<li><a href="../app/src/main/java/biz/digitalindustry/storage/query/QueryProvider.java"><code>QueryProvider.java</code></a></li>
-<li><a href="../app/src/main/java/biz/digitalindustry/storage/query/QueryProviderRegistry.java"><code>QueryProviderRegistry.java</code></a></li>
-<li><a href="../app/src/main/java/biz/digitalindustry/storage/query/cypher/CypherQueryProvider.java"><code>CypherQueryProvider.java</code></a></li>
-<li><a href="../app/src/main/java/biz/digitalindustry/storage/query/sql/SqlQueryProvider.java"><code>SqlQueryProvider.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/query/QueryProvider.java"><code>QueryProvider.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/query/QueryProviderRegistry.java"><code>QueryProviderRegistry.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/query/cypher/CypherQueryProvider.java"><code>CypherQueryProvider.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/query/sql/SqlQueryProvider.java"><code>SqlQueryProvider.java</code></a></li>
 </ul>
 <p>Dependency direction:</p>
 <ul>
@@ -193,10 +195,10 @@
 <h2 id="shared-indexing">Shared Indexing</h2>
 <p>Shared index layers:</p>
 <ul>
-<li><a href="../app/src/main/java/biz/digitalindustry/storage/engine/ExactMatchIndexManager.java"><code>ExactMatchIndexManager.java</code></a></li>
-<li><a href="../app/src/main/java/biz/digitalindustry/storage/engine/OrderedRangeIndexManager.java"><code>OrderedRangeIndexManager.java</code></a></li>
-<li><a href="../app/src/main/java/biz/digitalindustry/storage/index/ExactMatchIndex.java"><code>ExactMatchIndex.java</code></a></li>
-<li><a href="../app/src/main/java/biz/digitalindustry/storage/index/OrderedRangeIndex.java"><code>OrderedRangeIndex.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/engine/ExactMatchIndexManager.java"><code>ExactMatchIndexManager.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/engine/OrderedRangeIndexManager.java"><code>OrderedRangeIndexManager.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/index/ExactMatchIndex.java"><code>ExactMatchIndex.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/index/OrderedRangeIndex.java"><code>OrderedRangeIndex.java</code></a></li>
 </ul>
 <p>All three façades share the same storage-owned exact and ordered lookup path.</p>
 <h2 id="concurrency">Concurrency</h2>
@@ -224,7 +226,7 @@
 <p><code>SERIALIZABLE</code> currently maps to the same exclusive writer lane as <code>READ_WRITE</code></p>
 </li>
 </ul>
-<p>See <a href="./concurrency-model.md"><code>concurrency-model.md</code></a> for the operational contract.</p>
+<p>See <a href="/concurrency-model.html"><code>concurrency-model.md</code></a> for the operational contract.</p>
 <h2 id="design-rules">Design Rules</h2>
 <ul>
 <li>keep the engine record-based, not facade-specific</li>

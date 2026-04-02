@@ -3,14 +3,14 @@ title = "Server Query Guide"
 description = "The current Cypher-like and SQL-like subset exposed by the Nexum Micronaut transport layer."
 layout = "query"
 eyebrow = "Transport Guide"
-lead = "The built-in server is a narrow HTTP surface over app-owned query providers. Cypher routes into the graph facade and SQL routes into the relational facade."
+lead = "The built-in server is a narrow HTTP surface over lib-owned query providers. Cypher routes into the graph facade and SQL routes into the relational facade."
 ---
 
 # Server Query Guide
 
 This document describes the current native storage-backed query subset implemented by the Micronaut server.
 
-The server is only the HTTP transport layer. Query semantics live in the app module under `biz.digitalindustry.storage.query.*`.
+The server is only the HTTP transport layer. Query semantics live in the lib module under `biz.digitalindustry.storage.query.*`.
 
 Primary entry point:
 

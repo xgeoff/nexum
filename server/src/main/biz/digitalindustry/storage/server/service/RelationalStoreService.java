@@ -118,11 +118,11 @@ public class RelationalStoreService implements RelationalStore {
     @PreDestroy
     @Override
     public void close() {
-        lock.writeLock().lock();
+        writeLock.lock();
         try {
             closeDatabase();
         } finally {
-            lock.writeLock().unlock();
+            writeLock.unlock();
         }
     }
 

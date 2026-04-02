@@ -138,11 +138,11 @@ public class GraphStore implements biz.digitalindustry.storage.graph.api.GraphSt
 
     @PreDestroy
     public void close() {
-        lock.writeLock().lock();
+        writeLock.lock();
         try {
             closeDatabase();
         } finally {
-            lock.writeLock().unlock();
+            writeLock.unlock();
         }
     }
 

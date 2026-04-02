@@ -4,8 +4,8 @@ Nexum is a native embedded multi-model database implemented under `biz.digitalin
 
 The repository now has two active modules:
 
-- `app`: native storage engine plus graph, object, relational, and query modules
-- `server`: Micronaut HTTP transport over the app-owned query and maintenance layers
+- `lib`: native storage engine plus graph, object, relational, and query modules
+- `server`: Micronaut HTTP transport over the lib-owned query and maintenance layers
 
 ## Current Architecture
 
@@ -13,30 +13,30 @@ The canonical architecture page is [`architecture.md`](site/pages/architecture.m
 
 Core storage:
 
-- [`NativeStorageEngine.java`](app/src/main/java/biz/digitalindustry/storage/engine/NativeStorageEngine.java)
-- [`PageBackedRecordStore.java`](app/src/main/java/biz/digitalindustry/storage/store/PageBackedRecordStore.java)
-- [`NativeIndexStore.java`](app/src/main/java/biz/digitalindustry/storage/engine/NativeIndexStore.java)
-- [`PageFile.java`](app/src/main/java/biz/digitalindustry/storage/page/PageFile.java)
-- [`WriteAheadLog.java`](app/src/main/java/biz/digitalindustry/storage/log/WriteAheadLog.java)
+- [`NativeStorageEngine.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/engine/NativeStorageEngine.java)
+- [`PageBackedRecordStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/store/PageBackedRecordStore.java)
+- [`NativeIndexStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/engine/NativeIndexStore.java)
+- [`PageFile.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/page/PageFile.java)
+- [`WriteAheadLog.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/log/WriteAheadLog.java)
 
 Facades:
 
-- graph: [`NativeGraphStore.java`](app/src/main/java/biz/digitalindustry/storage/graph/engine/NativeGraphStore.java)
-- object: [`NativeObjectStore.java`](app/src/main/java/biz/digitalindustry/storage/object/engine/NativeObjectStore.java)
-- relational: [`NativeRelationalStore.java`](app/src/main/java/biz/digitalindustry/storage/relational/engine/NativeRelationalStore.java)
+- graph: [`NativeGraphStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/graph/engine/NativeGraphStore.java)
+- object: [`NativeObjectStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/engine/NativeObjectStore.java)
+- relational: [`NativeRelationalStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/relational/engine/NativeRelationalStore.java)
 
 Query providers:
 
-- Cypher: [`CypherQueryProvider.java`](app/src/main/java/biz/digitalindustry/storage/query/cypher/CypherQueryProvider.java)
-- SQL: [`SqlQueryProvider.java`](app/src/main/java/biz/digitalindustry/storage/query/sql/SqlQueryProvider.java)
-- shared registry: [`QueryProviderRegistry.java`](app/src/main/java/biz/digitalindustry/storage/query/QueryProviderRegistry.java)
+- Cypher: [`CypherQueryProvider.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/query/cypher/CypherQueryProvider.java)
+- SQL: [`SqlQueryProvider.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/query/sql/SqlQueryProvider.java)
+- shared registry: [`QueryProviderRegistry.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/query/QueryProviderRegistry.java)
 
 Server entry points:
 
-- [`Application.java`](server/src/main/biz/digitalindustry/storage/server/Application.java)
-- [`QueryController.java`](server/src/main/biz/digitalindustry/storage/server/controller/QueryController.java)
-- [`GraphStore.java`](server/src/main/biz/digitalindustry/storage/server/service/GraphStore.java)
-- [`RelationalStoreService.java`](server/src/main/biz/digitalindustry/storage/server/service/RelationalStoreService.java)
+- [`Application.java`](https://github.com/xgeoff/nexum/blob/main/server/src/main/biz/digitalindustry/storage/server/Application.java)
+- [`QueryController.java`](https://github.com/xgeoff/nexum/blob/main/server/src/main/biz/digitalindustry/storage/server/controller/QueryController.java)
+- [`GraphStore.java`](https://github.com/xgeoff/nexum/blob/main/server/src/main/biz/digitalindustry/storage/server/service/GraphStore.java)
+- [`RelationalStoreService.java`](https://github.com/xgeoff/nexum/blob/main/server/src/main/biz/digitalindustry/storage/server/service/RelationalStoreService.java)
 
 ## What Works
 
@@ -66,13 +66,13 @@ Run the full test suite:
 Run the lightweight benchmark harness:
 
 ```bash
-./gradlew :app:benchmark
+./gradlew :lib:benchmark
 ```
 
 Run the larger-scale benchmark profile:
 
 ```bash
-./gradlew :app:benchmark -DbenchmarkProfile=large
+./gradlew :lib:benchmark -DbenchmarkProfile=large
 ```
 
 Run the server:
@@ -170,7 +170,7 @@ See [`server-query-guide.md`](site/pages/server-query-guide.md) for the exact su
 ## Current Limits
 
 - the query layer is pattern-driven, not a full parser
-- the server is a transport wrapper over app-owned query providers
+- the server is a transport wrapper over lib-owned query providers
 - graph traversal syntax is still narrow
 - object and relational facades are explicit APIs, not reflection-based frameworks
 - the native index tree still has some rebuild fallbacks for less common structural delete cases

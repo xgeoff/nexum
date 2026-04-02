@@ -14,14 +14,16 @@ Status: active native implementation
 
 This facade provides object-style persistence on top of the native record engine.
 
+Source package: [github.com/xgeoff/nexum/tree/main/lib/src/main/java/biz/digitalindustry/storage/object](https://github.com/xgeoff/nexum/tree/main/lib/src/main/java/biz/digitalindustry/storage/object)
+
 ## Key Types
 
-- [`ObjectStore.java`](../app/src/main/java/biz/digitalindustry/storage/object/api/ObjectStore.java)
-- [`ObjectType.java`](../app/src/main/java/biz/digitalindustry/storage/object/api/ObjectType.java)
-- [`ObjectCodec.java`](../app/src/main/java/biz/digitalindustry/storage/object/api/ObjectCodec.java)
-- [`ObjectStoreContext.java`](../app/src/main/java/biz/digitalindustry/storage/object/api/ObjectStoreContext.java)
-- [`StoredObject.java`](../app/src/main/java/biz/digitalindustry/storage/object/api/StoredObject.java)
-- [`NativeObjectStore.java`](../app/src/main/java/biz/digitalindustry/storage/object/engine/NativeObjectStore.java)
+- [`ObjectStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectStore.java)
+- [`ObjectType.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectType.java)
+- [`ObjectCodec.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectCodec.java)
+- [`ObjectStoreContext.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectStoreContext.java)
+- [`StoredObject.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/StoredObject.java)
+- [`NativeObjectStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/engine/NativeObjectStore.java)
 
 ## Design
 

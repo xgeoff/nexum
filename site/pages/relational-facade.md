@@ -14,12 +14,14 @@ Status: active native implementation
 
 This facade provides table-and-row storage on top of the native record engine.
 
+Source package: [github.com/xgeoff/nexum/tree/main/lib/src/main/java/biz/digitalindustry/storage/relational](https://github.com/xgeoff/nexum/tree/main/lib/src/main/java/biz/digitalindustry/storage/relational)
+
 ## Key Types
 
-- [`RelationalStore.java`](../app/src/main/java/biz/digitalindustry/storage/relational/api/RelationalStore.java)
-- [`TableDefinition.java`](../app/src/main/java/biz/digitalindustry/storage/relational/api/TableDefinition.java)
-- [`Row.java`](../app/src/main/java/biz/digitalindustry/storage/relational/api/Row.java)
-- [`NativeRelationalStore.java`](../app/src/main/java/biz/digitalindustry/storage/relational/engine/NativeRelationalStore.java)
+- [`RelationalStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/relational/api/RelationalStore.java)
+- [`TableDefinition.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/relational/api/TableDefinition.java)
+- [`Row.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/relational/api/Row.java)
+- [`NativeRelationalStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/relational/engine/NativeRelationalStore.java)
 
 ## Design
 

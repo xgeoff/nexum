@@ -15,12 +15,14 @@ Status: active architecture
 
 Nexum is organized under `biz.digitalindustry.storage.*`.
 
+Repository: [github.com/xgeoff/nexum](https://github.com/xgeoff/nexum)
+
 At a high level:
 
 1. One native storage core owns persistence, recovery, schema primitives, and indexes.
 2. Graph, relational, and object modules are façades over that shared core.
 3. Query providers live in the product layer and target those façades.
-4. The built-in server is only a transport layer over the app-owned providers and maintenance APIs.
+4. The built-in server is only a transport layer over the lib-owned providers and maintenance APIs.
 
 ## Layering
 
@@ -38,11 +40,11 @@ The server does not own query semantics.
 
 Primary engine/runtime classes:
 
-- [`NativeStorageEngine.java`](../app/src/main/java/biz/digitalindustry/storage/engine/NativeStorageEngine.java)
-- [`PageBackedRecordStore.java`](../app/src/main/java/biz/digitalindustry/storage/store/PageBackedRecordStore.java)
-- [`NativeIndexStore.java`](../app/src/main/java/biz/digitalindustry/storage/engine/NativeIndexStore.java)
-- [`PageFile.java`](../app/src/main/java/biz/digitalindustry/storage/page/PageFile.java)
-- [`WriteAheadLog.java`](../app/src/main/java/biz/digitalindustry/storage/log/WriteAheadLog.java)
+- [`NativeStorageEngine.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/engine/NativeStorageEngine.java)
+- [`PageBackedRecordStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/store/PageBackedRecordStore.java)
+- [`NativeIndexStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/engine/NativeIndexStore.java)
+- [`PageFile.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/page/PageFile.java)
+- [`WriteAheadLog.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/log/WriteAheadLog.java)
 
 Core responsibilities:
 
@@ -57,31 +59,31 @@ Core responsibilities:
 
 Graph:
 
-- [`GraphStore.java`](../app/src/main/java/biz/digitalindustry/storage/graph/api/GraphStore.java)
-- [`NativeGraphStore.java`](../app/src/main/java/biz/digitalindustry/storage/graph/engine/NativeGraphStore.java)
+- [`GraphStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/graph/api/GraphStore.java)
+- [`NativeGraphStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/graph/engine/NativeGraphStore.java)
 
 Relational:
 
-- [`RelationalStore.java`](../app/src/main/java/biz/digitalindustry/storage/relational/api/RelationalStore.java)
-- [`TableDefinition.java`](../app/src/main/java/biz/digitalindustry/storage/relational/api/TableDefinition.java)
-- [`NativeRelationalStore.java`](../app/src/main/java/biz/digitalindustry/storage/relational/engine/NativeRelationalStore.java)
+- [`RelationalStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/relational/api/RelationalStore.java)
+- [`TableDefinition.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/relational/api/TableDefinition.java)
+- [`NativeRelationalStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/relational/engine/NativeRelationalStore.java)
 
 Object:
 
-- [`ObjectStore.java`](../app/src/main/java/biz/digitalindustry/storage/object/api/ObjectStore.java)
-- [`ObjectType.java`](../app/src/main/java/biz/digitalindustry/storage/object/api/ObjectType.java)
-- [`NativeObjectStore.java`](../app/src/main/java/biz/digitalindustry/storage/object/engine/NativeObjectStore.java)
+- [`ObjectStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectStore.java)
+- [`ObjectType.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectType.java)
+- [`NativeObjectStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/engine/NativeObjectStore.java)
 
 Each module uses shared storage primitives instead of owning separate persistence implementations.
 
 ## Query Layer
 
-Query providers are app-owned:
+Query providers are lib-owned:
 
-- [`QueryProvider.java`](../app/src/main/java/biz/digitalindustry/storage/query/QueryProvider.java)
-- [`QueryProviderRegistry.java`](../app/src/main/java/biz/digitalindustry/storage/query/QueryProviderRegistry.java)
-- [`CypherQueryProvider.java`](../app/src/main/java/biz/digitalindustry/storage/query/cypher/CypherQueryProvider.java)
-- [`SqlQueryProvider.java`](../app/src/main/java/biz/digitalindustry/storage/query/sql/SqlQueryProvider.java)
+- [`QueryProvider.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/query/QueryProvider.java)
+- [`QueryProviderRegistry.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/query/QueryProviderRegistry.java)
+- [`CypherQueryProvider.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/query/cypher/CypherQueryProvider.java)
+- [`SqlQueryProvider.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/query/sql/SqlQueryProvider.java)
 
 Current mapping:
 
@@ -98,10 +100,10 @@ This lets embedders choose between:
 
 The built-in Micronaut server is transport and service wiring only:
 
-- [`Application.java`](../server/src/main/biz/digitalindustry/storage/server/Application.java)
-- [`QueryController.java`](../server/src/main/biz/digitalindustry/storage/server/controller/QueryController.java)
-- [`MaintenanceController.java`](../server/src/main/biz/digitalindustry/storage/server/controller/MaintenanceController.java)
-- [`QueryProviderFactory.java`](../server/src/main/biz/digitalindustry/storage/server/service/QueryProviderFactory.java)
+- [`Application.java`](https://github.com/xgeoff/nexum/blob/main/server/src/main/biz/digitalindustry/storage/server/Application.java)
+- [`QueryController.java`](https://github.com/xgeoff/nexum/blob/main/server/src/main/biz/digitalindustry/storage/server/controller/QueryController.java)
+- [`MaintenanceController.java`](https://github.com/xgeoff/nexum/blob/main/server/src/main/biz/digitalindustry/storage/server/controller/MaintenanceController.java)
+- [`QueryProviderFactory.java`](https://github.com/xgeoff/nexum/blob/main/server/src/main/biz/digitalindustry/storage/server/service/QueryProviderFactory.java)
 
 It exposes:
 
@@ -121,7 +123,7 @@ Nexum currently standardizes on single-writer/multi-reader access.
 - readers see only last committed state while the writer uses a private overlay
 - write-path checkpointing is operator-controlled rather than automatically blocking commits
 
-See [`concurrency-model.md`](./concurrency-model.md).
+See [`concurrency-model.md`](/concurrency-model.html).
 
 ## Schema Model
 

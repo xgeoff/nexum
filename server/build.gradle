@@ -22,7 +22,7 @@ micronaut {
 }
 
 dependencies {
-    implementation(project(":app"))
+    implementation(project(":lib"))
     implementation("io.micronaut:micronaut-http-server-netty:${micronautVersion}")
     implementation("io.micronaut:micronaut-runtime:${micronautVersion}")
     implementation("io.micronaut:micronaut-jackson-databind:${micronautVersion}")
@@ -42,6 +42,14 @@ dependencies {
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.0")
 }
 
+base {
+    archivesName = 'nexum-server'
+}
+
+tasks.withType(Jar).configureEach {
+    archiveVersion = ''
+}
+
 java {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
@@ -56,7 +64,7 @@ sourceSets {
 }
 
 application {
-    mainClass.set("biz.digitalindustry.db.server.Application")
+    mainClass.set("biz.digitalindustry.storage.server.Application")
 }
 
 tasks.withType(Test).configureEach {
