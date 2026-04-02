@@ -189,6 +189,8 @@
 <li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/engine/NativeObjectStore.java"><code>NativeObjectStore.java</code></a></li>
 </ul>
 <p>Each module uses shared storage primitives instead of owning separate persistence implementations.</p>
+<p>Cross-facade retrieval is not supported by default. Data written through the graph facade remains graph-shaped, data written through the relational facade remains row-shaped, and data written through the object facade remains object-shaped. That separation is intentional: each facade defines its own <code>EntityType</code>, reserved identity fields, indexing rules, and API-level invariants, so Nexum keeps the shared engine unified at the storage layer without pretending the higher-level models are interchangeable automatically.</p>
+<p>If an embedder wants cross-facade projection anyway, they can build a custom bridge on top of the shared engine and schema layer, but that mapping is application-defined rather than built in.</p>
 <h2 id="query-layer">Query Layer</h2>
 <p>Query providers are lib-owned:</p>
 <ul>

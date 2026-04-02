@@ -76,6 +76,10 @@ Object:
 
 Each module uses shared storage primitives instead of owning separate persistence implementations.
 
+Cross-facade retrieval is not supported by default. Data written through the graph facade remains graph-shaped, data written through the relational facade remains row-shaped, and data written through the object facade remains object-shaped. That separation is intentional: each facade defines its own `EntityType`, reserved identity fields, indexing rules, and API-level invariants, so Nexum keeps the shared engine unified at the storage layer without pretending the higher-level models are interchangeable automatically.
+
+If an embedder wants cross-facade projection anyway, they can build a custom bridge on top of the shared engine and schema layer, but that mapping is application-defined rather than built in.
+
 ## Query Layer
 
 Query providers are lib-owned:

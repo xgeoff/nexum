@@ -85,6 +85,18 @@ For Maven, the same local-jar approach looks like:
 
 That `systemPath` pattern is only appropriate for local evaluation. If you plan to reuse Nexum across projects, publish the jar into your internal Maven repository instead of hard-wiring local file paths.
 
+## Important Multi-Model Note
+
+Nexum uses one storage engine underneath all three facades, but cross-facade retrieval is not supported by default.
+
+- graph data is stored and read through the graph facade
+- relational data is stored and read through the relational facade
+- object data is stored and read through the object facade
+
+This is intentional. Each facade defines its own schema shape, reserved identity fields, indexes, and API contract above the same physical storage engine. The engine is shared, but the higher-level models are not automatically translated into one another.
+
+If you need that behavior, you can write a custom bridge or projection layer on top of Nexum's shared record and schema primitives. Nexum does not provide that mapping automatically because the correct translation rules are application-specific.
+
 ## Graph Mode
 
 Use the graph facade when you want nodes, edges, and traversal directly from the embedded library.

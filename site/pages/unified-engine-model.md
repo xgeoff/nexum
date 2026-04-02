@@ -32,6 +32,10 @@ Canonical storage concepts:
 
 The storage layer is record-oriented. Object, relational, and graph behavior are implemented as façades over the same primitives.
 
+That shared engine does not imply automatic cross-facade reads. Graph records are not surfaced as relational rows or typed objects by default, and relational or object records are not surfaced as graph entities automatically. Nexum keeps those boundaries explicit because each facade introduces its own schema conventions, identity fields, and indexing behavior above the same physical storage engine.
+
+If a product needs cross-facade access, it can implement a custom bridge or projection layer on top of the shared record and schema primitives, but that behavior is outside the default contract.
+
 ## Storage Engine
 
 Core runtime:

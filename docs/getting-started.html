@@ -181,6 +181,15 @@
 &lt;/dependency&gt;
 </code></pre>
 <p>That <code>systemPath</code> pattern is only appropriate for local evaluation. If you plan to reuse Nexum across projects, publish the jar into your internal Maven repository instead of hard-wiring local file paths.</p>
+<h2 id="important-multi-model-note">Important Multi-Model Note</h2>
+<p>Nexum uses one storage engine underneath all three facades, but cross-facade retrieval is not supported by default.</p>
+<ul>
+<li>graph data is stored and read through the graph facade</li>
+<li>relational data is stored and read through the relational facade</li>
+<li>object data is stored and read through the object facade</li>
+</ul>
+<p>This is intentional. Each facade defines its own schema shape, reserved identity fields, indexes, and API contract above the same physical storage engine. The engine is shared, but the higher-level models are not automatically translated into one another.</p>
+<p>If you need that behavior, you can write a custom bridge or projection layer on top of Nexum's shared record and schema primitives. Nexum does not provide that mapping automatically because the correct translation rules are application-specific.</p>
 <h2 id="graph-mode">Graph Mode</h2>
 <p>Use the graph facade when you want nodes, edges, and traversal directly from the embedded library.</p>
 <pre><code class="language-java">import biz.digitalindustry.storage.graph.api.GraphStore;
