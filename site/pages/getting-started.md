@@ -163,26 +163,45 @@ Key references:
 
 ## Object Mode
 
-Use the object facade when you want typed persistence with explicit codecs instead of reflective mapping.
+Use the object facade when you want typed persistence. Start with the DSL and generated default codec for `Map<String, Object>` documents, then drop down to a handwritten codec only when you need custom encoding logic.
 
 ```java
-import biz.digitalindustry.storage.object.api.ObjectCodec;
-import biz.digitalindustry.storage.object.api.ObjectType;
+import biz.digitalindustry.storage.object.api.ObjectTypeDefinition;
+import biz.digitalindustry.storage.object.api.ObjectTypes;
 import biz.digitalindustry.storage.object.engine.NativeObjectStore;
 
+import java.util.Map;
+
+ObjectTypeDefinition personDefinition = ObjectTypes.define("GeneratedPerson")
+        .key("id")
+        .string("id").required()
+        .string("name").required()
+        .longNumber("age").required()
+        .index("generated_person_name_idx").on("name")
+        .build();
+
 try (var store = NativeObjectStore.fileBacked("./data/object.dbs")) {
-    store.registerType(personType);
-    store.save(personType, new Person("person-1", "Ada"));
+    var personType = store.registerGeneratedType(personDefinition);
+    store.save(personType, Map.of(
+            "id", "person-1",
+            "name", "Ada",
+            "age", 37L
+    ));
 
     var loaded = store.get(personType, "person-1");
-    System.out.println(loaded.value().name());
+    System.out.println(loaded.value().get("name"));
 }
 ```
+
+If you need explicit control over how a domain object is encoded and decoded, Nexum also supports a handwritten `ObjectCodec<T>`. That path is covered in the object facade reference.
 
 Key references:
 
 - [`ObjectStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectStore.java)
 - [`ObjectCodec.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectCodec.java)
+- [`ObjectTypeDefinition.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectTypeDefinition.java)
+- [`ObjectTypes.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectTypes.java)
+- [`GeneratedObjectTypes.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/GeneratedObjectTypes.java)
 - [`NativeObjectStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/engine/NativeObjectStore.java)
 
 ## Use The Query Providers Directly

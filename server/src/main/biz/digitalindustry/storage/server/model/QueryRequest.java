@@ -12,7 +12,7 @@ import java.util.Map;
  */
 @Introspected
 public class QueryRequest {
-    private final Map<String, String> queries = new LinkedHashMap<>();
+    private final Map<String, Object> queries = new LinkedHashMap<>();
 
     public QueryRequest() {
     }
@@ -21,7 +21,7 @@ public class QueryRequest {
      * Adds a query of the given type. Used for JSON deserialization and tests.
      */
     @JsonAnySetter
-    public void setQuery(String name, String query) {
+    public void setQuery(String name, Object query) {
         if (name != null) {
             queries.put(name, query);
         }
@@ -31,8 +31,12 @@ public class QueryRequest {
      * Convenience factory for tests.
      */
     public static QueryRequest of(String type, String query) {
+        return of(type, (Object) query);
+    }
+
+    public static QueryRequest of(String type, Object payload) {
         QueryRequest req = new QueryRequest();
-        req.setQuery(type, query);
+        req.setQuery(type, payload);
         return req;
     }
 
@@ -46,13 +50,12 @@ public class QueryRequest {
     /**
      * Returns the query string for the first query type or {@code null} if none.
      */
-    public String query() {
+    public Object query() {
         String type = queryType();
         return type == null ? null : queries.get(type);
     }
 
-    public Map<String, String> getQueries() {
+    public Map<String, Object> getQueries() {
         return queries;
     }
 }
-

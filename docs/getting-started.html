@@ -254,23 +254,41 @@ try (var store = NativeRelationalStore.fileBacked("./data/relational.dbs")) {
 <li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/relational/engine/NativeRelationalStore.java"><code>NativeRelationalStore.java</code></a></li>
 </ul>
 <h2 id="object-mode">Object Mode</h2>
-<p>Use the object facade when you want typed persistence with explicit codecs instead of reflective mapping.</p>
-<pre><code class="language-java">import biz.digitalindustry.storage.object.api.ObjectCodec;
-import biz.digitalindustry.storage.object.api.ObjectType;
+<p>Use the object facade when you want typed persistence. Start with the DSL and generated default codec for <code>Map&lt;String, Object&gt;</code> documents, then drop down to a handwritten codec only when you need custom encoding logic.</p>
+<pre><code class="language-java">import biz.digitalindustry.storage.object.api.ObjectTypeDefinition;
+import biz.digitalindustry.storage.object.api.ObjectTypes;
 import biz.digitalindustry.storage.object.engine.NativeObjectStore;
 
+import java.util.Map;
+
+ObjectTypeDefinition personDefinition = ObjectTypes.define("GeneratedPerson")
+        .key("id")
+        .string("id").required()
+        .string("name").required()
+        .longNumber("age").required()
+        .index("generated_person_name_idx").on("name")
+        .build();
+
 try (var store = NativeObjectStore.fileBacked("./data/object.dbs")) {
-    store.registerType(personType);
-    store.save(personType, new Person("person-1", "Ada"));
+    var personType = store.registerGeneratedType(personDefinition);
+    store.save(personType, Map.of(
+            "id", "person-1",
+            "name", "Ada",
+            "age", 37L
+    ));
 
     var loaded = store.get(personType, "person-1");
-    System.out.println(loaded.value().name());
+    System.out.println(loaded.value().get("name"));
 }
 </code></pre>
+<p>If you need explicit control over how a domain object is encoded and decoded, Nexum also supports a handwritten <code>ObjectCodec&lt;T&gt;</code>. That path is covered in the object facade reference.</p>
 <p>Key references:</p>
 <ul>
 <li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectStore.java"><code>ObjectStore.java</code></a></li>
 <li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectCodec.java"><code>ObjectCodec.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectTypeDefinition.java"><code>ObjectTypeDefinition.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectTypes.java"><code>ObjectTypes.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/GeneratedObjectTypes.java"><code>GeneratedObjectTypes.java</code></a></li>
 <li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/engine/NativeObjectStore.java"><code>NativeObjectStore.java</code></a></li>
 </ul>
 <h2 id="use-the-query-providers-directly">Use The Query Providers Directly</h2>

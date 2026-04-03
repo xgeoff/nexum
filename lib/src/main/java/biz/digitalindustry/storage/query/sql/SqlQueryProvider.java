@@ -9,8 +9,10 @@ import biz.digitalindustry.storage.model.FieldValue;
 import biz.digitalindustry.storage.model.LongValue;
 import biz.digitalindustry.storage.model.StringValue;
 import biz.digitalindustry.storage.query.QueryNode;
+import biz.digitalindustry.storage.query.QueryCommand;
 import biz.digitalindustry.storage.query.QueryProvider;
 import biz.digitalindustry.storage.query.QueryResult;
+import biz.digitalindustry.storage.query.TextQuerySupport;
 import biz.digitalindustry.storage.schema.FieldDefinition;
 import biz.digitalindustry.storage.schema.IndexDefinition;
 import biz.digitalindustry.storage.schema.IndexKind;
@@ -62,7 +64,8 @@ public class SqlQueryProvider implements QueryProvider {
     }
 
     @Override
-    public QueryResult execute(String query) {
+    public QueryResult execute(QueryCommand command) {
+        String query = TextQuerySupport.requireQueryText(command);
         Matcher matcher = CREATE_TABLE.matcher(query);
         if (matcher.matches()) {
             TableDefinition table = parseCreateTable(matcher.group(1), matcher.group(2));

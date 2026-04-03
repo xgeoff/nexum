@@ -4,8 +4,10 @@ import biz.digitalindustry.storage.graph.api.GraphStore;
 import biz.digitalindustry.storage.graph.model.GraphEdgeRecord;
 import biz.digitalindustry.storage.graph.model.GraphNodeRecord;
 import biz.digitalindustry.storage.query.QueryNode;
+import biz.digitalindustry.storage.query.QueryCommand;
 import biz.digitalindustry.storage.query.QueryProvider;
 import biz.digitalindustry.storage.query.QueryResult;
+import biz.digitalindustry.storage.query.TextQuerySupport;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -66,7 +68,8 @@ public class CypherQueryProvider implements QueryProvider {
     }
 
     @Override
-    public QueryResult execute(String query) {
+    public QueryResult execute(QueryCommand command) {
+        String query = TextQuerySupport.requireQueryText(command);
         Matcher matcher = CREATE_NODE.matcher(query);
         if (matcher.matches()) {
             GraphNodeRecord node = graphStore.upsertNode(matcher.group(2), matcher.group(1));

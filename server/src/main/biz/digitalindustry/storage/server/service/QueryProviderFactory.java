@@ -19,7 +19,16 @@ public class QueryProviderFactory {
     }
 
     @Singleton
-    QueryProviderRegistry queryProviderRegistry(CypherQueryProvider cypherProvider, SqlQueryProvider sqlProvider) {
-        return new QueryProviderRegistry(java.util.List.of(cypherProvider, sqlProvider));
+    ObjectQueryProvider objectQueryProvider(ObjectStoreService objectStore) {
+        return new ObjectQueryProvider(objectStore);
+    }
+
+    @Singleton
+    QueryProviderRegistry queryProviderRegistry(
+            CypherQueryProvider cypherProvider,
+            SqlQueryProvider sqlProvider,
+            ObjectQueryProvider objectProvider
+    ) {
+        return new QueryProviderRegistry(java.util.List.of(cypherProvider, sqlProvider, objectProvider));
     }
 }

@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <title>Object Facade</title>
-    <meta name="description" content="Typed object persistence over the native record engine using explicit schemas and codecs.">
+    <meta name="description" content="Typed object persistence over the native record engine with a simple schema DSL and optional handwritten codecs.">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -129,10 +129,10 @@
         <section class="hero-panel hero-panel--reference">
             <p class="eyebrow">API Reference</p>
             <h1>Object Facade</h1>
-            <p class="hero-copy">The object facade stays explicit: object types are registered intentionally, codecs control persistence shape, and the engine owns identity and indexing underneath.</p>
+            <p class="hero-copy">Start with the schema DSL and generated default codec for the simple path, then drop down to a handwritten codec only when you need explicit encoding control.</p>
             <div class="hero-chip-row">
                 <span class="hero-chip">Persistence Style</span>
-                <span class="hero-chip hero-chip--muted">Explicit codecs, no magic</span>
+                <span class="hero-chip hero-chip--muted">DSL first, explicit control when needed</span>
             </div>
         </section>
         <section class="content-panel prose prose--docs">
@@ -145,6 +145,9 @@
 <li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectStore.java"><code>ObjectStore.java</code></a></li>
 <li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectType.java"><code>ObjectType.java</code></a></li>
 <li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectCodec.java"><code>ObjectCodec.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectTypeDefinition.java"><code>ObjectTypeDefinition.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectTypes.java"><code>ObjectTypes.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/GeneratedObjectTypes.java"><code>GeneratedObjectTypes.java</code></a></li>
 <li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectStoreContext.java"><code>ObjectStoreContext.java</code></a></li>
 <li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/StoredObject.java"><code>StoredObject.java</code></a></li>
 <li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/engine/NativeObjectStore.java"><code>NativeObjectStore.java</code></a></li>
@@ -156,7 +159,11 @@
 <li>no bytecode enhancement</li>
 <li>no runtime schema inference</li>
 </ul>
-<p>Callers register <code>ObjectType&lt;T&gt;</code> definitions and supply an <code>ObjectCodec&lt;T&gt;</code> that maps domain objects to and from stored fields.</p>
+<p>Callers can use the object facade in two ways:</p>
+<ul>
+<li>define an <code>ObjectTypeDefinition</code> with the DSL and use the generated default codec for <code>Map&lt;String, Object&gt;</code> documents</li>
+<li>define <code>ObjectType&lt;T&gt;</code> and supply a handwritten <code>ObjectCodec&lt;T&gt;</code> when you need full control</li>
+</ul>
 <h2 id="capabilities">Capabilities</h2>
 <p>Current API surface:</p>
 <ul>
@@ -170,15 +177,109 @@
 </ul>
 <p>The reserved <code>objectKey</code> field acts as the stable logical identity inside each type namespace.</p>
 <h2 id="example">Example</h2>
-<pre><code class="language-java">try (biz.digitalindustry.storage.object.api.ObjectStore store =
-             new biz.digitalindustry.storage.object.engine.NativeObjectStore("data/object-store.dbs")) {
-    store.registerType(addressType);
-    store.registerType(personType);
+<p>Start with the DSL and generated default codec unless you need custom encoding or rich domain-object mapping.</p>
+<pre><code class="language-java">ObjectTypeDefinition personDefinition = ObjectTypes.define("Person")
+        .key("id")
+        .string("id").required()
+        .string("name").required()
+        .longNumber("age").required()
+        .index("person_name_idx").on("name")
+        .build();
 
-    store.save(addressType, new Address("addr-1", "Oakland"));
-    store.save(personType, new Person("person-1", "Ada", new Address("addr-1", "Oakland")));
+try (var store = NativeObjectStore.fileBacked("./data/object-store.dbs")) {
+    ObjectType&lt;Map&lt;String, Object&gt;&gt; personType = store.registerGeneratedType(personDefinition);
 
-    StoredObject&lt;Person&gt; loaded = store.get(personType, "person-1");
+    store.save(personType, Map.of(
+            "id", "person-1",
+            "name", "Ada",
+            "age", 37L
+    ));
+}
+</code></pre>
+<p>Generated object type definitions are persisted in the engine as reserved metadata entities, so the store can rehydrate them on reopen.</p>
+<p>That generated path should feel close to the server-side JSON experience. It is the default path for embedded callers when <code>Map&lt;String, Object&gt;</code> is enough.</p>
+<p>Reference fields use the same builder style:</p>
+<pre><code class="language-java">ObjectTypeDefinition personDefinition = ObjectTypes.define("Person")
+        .key("id")
+        .string("id").required()
+        .string("name").required()
+        .reference("address").to("Address").optional()
+        .build();
+</code></pre>
+<h2 id="handwritten-codec">Handwritten Codec</h2>
+<p>Use a handwritten <code>ObjectCodec&lt;T&gt;</code> when you want explicit control over how a domain object is encoded and decoded.</p>
+<p>The type definitions should usually live with the domain types they describe:</p>
+<pre><code class="language-java">record Address(String id, String city) {
+    static final ObjectType&lt;Address&gt; TYPE = new ObjectType&lt;&gt;(
+            "Address",
+            List.of(
+                    new FieldDefinition("city", ValueType.STRING, true, false)
+            ),
+            List.of(),
+            new ObjectCodec&lt;&gt;() {
+                @Override
+                public String key(Address address) {
+                    return address.id();
+                }
+
+                @Override
+                public Map&lt;String, FieldValue&gt; encode(Address address, ObjectStoreContext context) {
+                    return Map.of("city", new StringValue(address.city()));
+                }
+
+                @Override
+                public Address decode(StoredObjectView view, ObjectStoreContext context) {
+                    return new Address(
+                            view.key(),
+                            ((StringValue) view.fields().get("city")).value()
+                    );
+                }
+            }
+    );
+}
+
+record Person(String id, String name, Address address) {
+    static final ObjectType&lt;Person&gt; TYPE = new ObjectType&lt;&gt;(
+            "Person",
+            List.of(
+                    new FieldDefinition("name", ValueType.STRING, true, false),
+                    new FieldDefinition("address", ValueType.REFERENCE, true, false)
+            ),
+            List.of(),
+            new ObjectCodec&lt;&gt;() {
+                @Override
+                public String key(Person person) {
+                    return person.id();
+                }
+
+                @Override
+                public Map&lt;String, FieldValue&gt; encode(Person person, ObjectStoreContext context) {
+                    return Map.of(
+                            "name", new StringValue(person.name()),
+                            "address", context.reference(Address.TYPE, person.address().id())
+                    );
+                }
+
+                @Override
+                public Person decode(StoredObjectView view, ObjectStoreContext context) {
+                    return new Person(
+                            view.key(),
+                            ((StringValue) view.fields().get("name")).value(),
+                            context.resolve(Address.TYPE, (ReferenceValue) view.fields().get("address"))
+                    );
+                }
+            }
+    );
+}
+
+try (var store = NativeObjectStore.fileBacked("./data/object-store.dbs")) {
+    store.registerType(Address.TYPE);
+    store.registerType(Person.TYPE);
+
+    store.save(Address.TYPE, new Address("addr-1", "Oakland"));
+    store.save(Person.TYPE, new Person("person-1", "Ada", new Address("addr-1", "Oakland")));
+
+    StoredObject&lt;Person&gt; loaded = store.get(Person.TYPE, "person-1");
     System.out.println(loaded.value().address().city());
 }
 </code></pre>

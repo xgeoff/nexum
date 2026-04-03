@@ -1,6 +1,7 @@
 package biz.digitalindustry.storage.server.controller;
 
 import biz.digitalindustry.storage.query.QueryNode;
+import biz.digitalindustry.storage.query.QueryCommand;
 import biz.digitalindustry.storage.query.QueryProviderRegistry;
 import biz.digitalindustry.storage.query.QueryResult;
 import biz.digitalindustry.storage.server.model.QueryRequest;
@@ -25,25 +26,48 @@ public class QueryController {
     @Post
     @Produces(MediaType.APPLICATION_JSON)
     public QueryResponse handleQuery(@Body QueryRequest request) {
+        if (request.getQueries().size() != 1) {
+            throw new HttpStatusException(HttpStatus.BAD_REQUEST, "request must contain exactly one top-level query provider");
+        }
+
         String queryType = request.queryType();
-        String query = request.query();
+        QueryCommand command = normalize(request);
 
         if (queryType == null || queryType.isBlank()) {
             throw new HttpStatusException(HttpStatus.BAD_REQUEST, "queryType must not be null or empty");
         }
-        if (query == null || query.isBlank()) {
-            throw new HttpStatusException(HttpStatus.BAD_REQUEST, "query must not be null or empty");
-        }
 
         return registry.getProvider(queryType)
-                .map(provider -> execute(provider, query))
+                .map(provider -> execute(provider, command))
                 .orElseThrow(() -> new HttpStatusException(HttpStatus.BAD_REQUEST,
                         "Unsupported query type: " + queryType));
     }
 
-    private QueryResponse execute(biz.digitalindustry.storage.query.QueryProvider provider, String query) {
+    private QueryCommand normalize(QueryRequest request) {
+        Object payload = request.query();
+        if (payload instanceof String queryText) {
+            if (queryText.isBlank()) {
+                throw new HttpStatusException(HttpStatus.BAD_REQUEST, "queryText must not be null or empty");
+            }
+            return new QueryCommand(request.queryType(), Map.of("queryText", queryText));
+        }
+        if (payload instanceof Map<?, ?> rawMap) {
+            Map<String, Object> normalized = new java.util.LinkedHashMap<>();
+            for (Map.Entry<?, ?> entry : rawMap.entrySet()) {
+                if (!(entry.getKey() instanceof String key)) {
+                    throw new HttpStatusException(HttpStatus.BAD_REQUEST, "query payload keys must be strings");
+                }
+                normalized.put(key, entry.getValue());
+            }
+            return new QueryCommand(request.queryType(), normalized);
+        }
+        throw new HttpStatusException(HttpStatus.BAD_REQUEST,
+                "query payload must be either a string or an object");
+    }
+
+    private QueryResponse execute(biz.digitalindustry.storage.query.QueryProvider provider, QueryCommand command) {
         try {
-            return toQueryResponse(provider.execute(query));
+            return toQueryResponse(provider.execute(command));
         } catch (IllegalArgumentException e) {
             throw new HttpStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
         }

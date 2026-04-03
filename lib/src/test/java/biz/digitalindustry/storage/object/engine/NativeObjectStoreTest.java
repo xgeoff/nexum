@@ -1,9 +1,12 @@
 package biz.digitalindustry.storage.object.engine;
 
 import biz.digitalindustry.storage.engine.NativeStorageEngine;
+import biz.digitalindustry.storage.object.api.ObjectFieldDefinition;
 import biz.digitalindustry.storage.object.api.ObjectCodec;
+import biz.digitalindustry.storage.object.api.ObjectTypes;
 import biz.digitalindustry.storage.object.api.ObjectStoreContext;
 import biz.digitalindustry.storage.object.api.ObjectType;
+import biz.digitalindustry.storage.object.api.ObjectTypeDefinition;
 import biz.digitalindustry.storage.object.api.StoredObject;
 import biz.digitalindustry.storage.object.api.StoredObjectView;
 import biz.digitalindustry.storage.model.FieldValue;
@@ -243,6 +246,40 @@ public class NativeObjectStoreTest {
         assertNotNull(reopened);
         assertEquals("Ada", reopened.value().name());
         assertEquals("Oakland", reopened.value().address().city());
+    }
+
+    @Test
+    public void testGeneratedTypeDefinitionsPersistAcrossReopen() throws Exception {
+        openStore("native-generated-object-store");
+
+        ObjectTypeDefinition generatedDefinition = ObjectTypes.define("GeneratedPerson")
+                .key("id")
+                .string("id").required()
+                .string("name").required()
+                .longNumber("age").required()
+                .index("generated_person_name_idx").on("name")
+                .build();
+
+        ObjectType<Map<String, Object>> generatedType = store.registerGeneratedType(generatedDefinition);
+        store.save(generatedType, Map.of(
+                "id", "person-1",
+                "name", "Ada",
+                "age", 37L
+        ));
+
+        store.close();
+        store = null;
+
+        store = new NativeObjectStore(dbPath.toString());
+        assertEquals(1, store.generatedTypeDefinitions().size());
+        assertEquals("GeneratedPerson", store.generatedTypeDefinitions().get(0).name());
+
+        ObjectType<Map<String, Object>> reopenedType = store.generatedType("GeneratedPerson");
+        assertNotNull(reopenedType);
+        StoredObject<Map<String, Object>> reopened = store.get(reopenedType, "person-1");
+        assertNotNull(reopened);
+        assertEquals("Ada", reopened.value().get("name"));
+        assertEquals(37L, ((Number) reopened.value().get("age")).longValue());
     }
 
     @Test

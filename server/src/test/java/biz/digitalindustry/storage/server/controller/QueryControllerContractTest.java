@@ -5,6 +5,7 @@ import biz.digitalindustry.storage.server.model.Node;
 import biz.digitalindustry.storage.server.model.QueryRequest;
 import biz.digitalindustry.storage.server.model.QueryResponse;
 import biz.digitalindustry.storage.server.service.GraphStore;
+import biz.digitalindustry.storage.server.service.ObjectStoreService;
 import biz.digitalindustry.storage.server.service.RelationalStoreService;
 import io.micronaut.http.HttpRequest;
 import io.micronaut.http.HttpResponse;
@@ -33,10 +34,14 @@ abstract class QueryControllerContractTest {
     @Inject
     RelationalStoreService relationalStore;
 
+    @Inject
+    ObjectStoreService objectStore;
+
     @BeforeEach
     void resetStore() throws IOException {
         graphStore.reset();
         relationalStore.reset();
+        objectStore.reset();
     }
 
     @Test
@@ -240,6 +245,141 @@ abstract class QueryControllerContractTest {
     }
 
     @Test
+    void testObjectRegisterPutGetFindPatchAndDelete() throws IOException {
+        client.toBlocking().exchange(objectRequest(personTypeRegistration()),
+                QueryResponse.class);
+
+        QueryResponse putResponse = client.toBlocking().exchange(
+                objectRequest(Map.of(
+                        "action", "put",
+                        "type", "person",
+                        "key", "person-1",
+                        "document", Map.of(
+                                "id", "person-1",
+                                "name", "Ada",
+                                "age", 37,
+                                "loginCount", 2,
+                                "active", true
+                        )
+                )),
+                QueryResponse.class
+        ).body();
+        assertNotNull(putResponse);
+        assertEquals(true, putResponse.getResults().get(0).get("result").getProperties().get("stored"));
+
+        QueryResponse getResponse = client.toBlocking().exchange(
+                objectRequest(Map.of(
+                        "action", "get",
+                        "type", "person",
+                        "key", "person-1"
+                )),
+                QueryResponse.class
+        ).body();
+        assertNotNull(getResponse);
+        Node stored = getResponse.getResults().get(0).get("object");
+        assertEquals("person-1", stored.getId());
+        assertEquals("object", stored.getProperties().get("entityType"));
+        Map<String, Object> document = castMap(stored.getProperties().get("document"));
+        assertEquals("Ada", document.get("name"));
+        assertEquals(37L, ((Number) document.get("age")).longValue());
+
+        QueryResponse findResponse = client.toBlocking().exchange(
+                objectRequest(Map.of(
+                        "action", "find",
+                        "type", "person",
+                        "selector", Map.of(
+                                "name", Map.of("eq", "Ada")
+                        )
+                )),
+                QueryResponse.class
+        ).body();
+        assertNotNull(findResponse);
+        assertEquals(1, findResponse.getResults().size());
+        assertEquals("person-1", findResponse.getResults().get(0).get("object").getId());
+
+        QueryResponse patchResponse = client.toBlocking().exchange(
+                objectRequest(Map.of(
+                        "action", "patch",
+                        "type", "person",
+                        "key", "person-1",
+                        "patch", Map.of(
+                                "set", Map.of(
+                                        "name", "Ada Lovelace",
+                                        "active", false
+                                ),
+                                "inc", Map.of(
+                                        "loginCount", 3,
+                                        "age", 1
+                                )
+                        )
+                )),
+                QueryResponse.class
+        ).body();
+        assertNotNull(patchResponse);
+        assertEquals(true, patchResponse.getResults().get(0).get("result").getProperties().get("patched"));
+
+        QueryResponse afterPatch = client.toBlocking().exchange(
+                objectRequest(Map.of(
+                        "action", "get",
+                        "type", "person",
+                        "key", "person-1"
+                )),
+                QueryResponse.class
+        ).body();
+        assertNotNull(afterPatch);
+        Map<String, Object> patchedDocument = castMap(afterPatch.getResults().get(0).get("object").getProperties().get("document"));
+        assertEquals("Ada Lovelace", patchedDocument.get("name"));
+        assertEquals(false, patchedDocument.get("active"));
+        assertEquals(38L, ((Number) patchedDocument.get("age")).longValue());
+        assertEquals(5L, ((Number) patchedDocument.get("loginCount")).longValue());
+
+        QueryResponse deleteResponse = client.toBlocking().exchange(
+                objectRequest(Map.of(
+                        "action", "delete",
+                        "type", "person",
+                        "key", "person-1"
+                )),
+                QueryResponse.class
+        ).body();
+        assertNotNull(deleteResponse);
+        assertEquals(true, deleteResponse.getResults().get(0).get("result").getProperties().get("deleted"));
+
+        QueryResponse afterDelete = client.toBlocking().exchange(
+                objectRequest(Map.of(
+                        "action", "get",
+                        "type", "person",
+                        "key", "person-1"
+                )),
+                QueryResponse.class
+        ).body();
+        assertNotNull(afterDelete);
+        assertTrue(afterDelete.getResults().isEmpty());
+    }
+
+    @Test
+    void testObjectFindRejectsMultiFieldSelector() throws IOException {
+        client.toBlocking().exchange(objectRequest(personTypeRegistration()),
+                QueryResponse.class);
+
+        HttpClientResponseException ex = assertThrows(HttpClientResponseException.class,
+                () -> client.toBlocking().exchange(
+                        objectRequest(Map.of(
+                                "action", "find",
+                                "type", "person",
+                                "selector", Map.of(
+                                        "name", Map.of("eq", "Ada"),
+                                        "active", Map.of("eq", true)
+                                )
+                        )),
+                        QueryResponse.class
+                ));
+
+        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatus());
+        String body = ex.getResponse().getBody(String.class).orElse("");
+        assertTrue(body.contains("exactly one field"));
+    }
+
+    @Test
     void testMissingQueryTypeReturnsError() {
         QueryRequest request = new QueryRequest();
         HttpRequest<QueryRequest> httpRequest = HttpRequest.POST("/query", request);
@@ -249,7 +389,7 @@ abstract class QueryControllerContractTest {
 
         assertEquals(HttpStatus.BAD_REQUEST, ex.getStatus());
         String body = ex.getResponse().getBody(String.class).orElse("");
-        assertTrue(body.contains("queryType") || body.contains("query type"));
+        assertTrue(body.contains("exactly one top-level query provider") || body.contains("queryType") || body.contains("query type"));
     }
 
     @Test
@@ -289,5 +429,38 @@ abstract class QueryControllerContractTest {
         assertNotNull(after);
         assertTrue(after.walSizeBytes() <= before.walSizeBytes());
         assertFalse(after.checkpointRequested());
+    }
+
+    private Map<String, Object> personTypeRegistration() {
+        return Map.of(
+                "action", "registerType",
+                "type", "person",
+                "definition", Map.of(
+                        "keyField", "id",
+                        "fields", Map.of(
+                                "id", Map.of("type", "string", "required", true),
+                                "name", Map.of("type", "string", "required", true),
+                                "age", Map.of("type", "long", "required", true),
+                                "loginCount", Map.of("type", "long", "required", true),
+                                "active", Map.of("type", "boolean", "required", true)
+                        ),
+                        "indexes", java.util.List.of(
+                                Map.of(
+                                        "name", "person_name_idx",
+                                        "kind", "non_unique",
+                                        "fields", java.util.List.of("name")
+                                )
+                        )
+                )
+        );
+    }
+
+    private static HttpRequest<Map<String, Object>> objectRequest(Map<String, Object> payload) {
+        return HttpRequest.POST("/query", Map.of("object", payload));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> castMap(Object value) {
+        return (Map<String, Object>) value;
     }
 }
