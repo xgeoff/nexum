@@ -106,15 +106,23 @@ public class NativeObjectStore implements ObjectStore {
     public ObjectType<Map<String, Object>> registerGeneratedType(ObjectTypeDefinition definition) {
         return writeLocked(() -> {
             GeneratedObjectTypes.validateDefinition(definition);
-            ObjectTypeDefinition existing = generatedDefinitions.get(definition.name());
-            if (existing != null && !existing.equals(definition)) {
-                throw new IllegalArgumentException("Generated object type '" + definition.name() + "' is already registered with a different definition");
-            }
-            if (existing == null) {
-                persistDefinition(definition);
-            }
-            generatedDefinitions.put(definition.name(), definition);
+            registerGeneratedDefinition(definition);
             ObjectType<Map<String, Object>> type = GeneratedObjectTypes.create(
+                    definition,
+                    this::generatedType,
+                    this::generatedTypeDefinition
+            );
+            registerType(type);
+            return type;
+        });
+    }
+
+    public <T> ObjectType<T> registerBeanType(Class<T> beanType, ObjectTypeDefinition definition) {
+        return writeLocked(() -> {
+            GeneratedObjectTypes.validateDefinition(definition);
+            registerGeneratedDefinition(definition);
+            ObjectType<T> type = GeneratedObjectTypes.createBean(
+                    beanType,
                     definition,
                     this::generatedType,
                     this::generatedTypeDefinition
@@ -383,6 +391,17 @@ public class NativeObjectStore implements ObjectStore {
             }
             tx.commit();
         }
+    }
+
+    private void registerGeneratedDefinition(ObjectTypeDefinition definition) {
+        ObjectTypeDefinition existing = generatedDefinitions.get(definition.name());
+        if (existing != null && !existing.equals(definition)) {
+            throw new IllegalArgumentException("Generated object type '" + definition.name() + "' is already registered with a different definition");
+        }
+        if (existing == null) {
+            persistDefinition(definition);
+        }
+        generatedDefinitions.put(definition.name(), definition);
     }
 
     private void deleteDefinitionRecords(String typeName) {

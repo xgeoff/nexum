@@ -4,8 +4,14 @@ import biz.digitalindustry.storage.schema.IndexDefinition;
 import biz.digitalindustry.storage.schema.IndexKind;
 import biz.digitalindustry.storage.schema.ValueType;
 
+import java.beans.BeanInfo;
+import java.beans.IntrospectionException;
+import java.beans.Introspector;
+import java.beans.PropertyDescriptor;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 public final class ObjectTypes {
     private ObjectTypes() {
@@ -15,13 +21,17 @@ public final class ObjectTypes {
         return new Builder(name);
     }
 
-    public static final class Builder {
+    public static BeanBuilder define(Class<?> beanType) {
+        return new BeanBuilder(beanType);
+    }
+
+    public static class Builder {
         private final String name;
-        private final List<ObjectFieldDefinition> fields = new ArrayList<>();
+        private final Map<String, ObjectFieldDefinition> fields = new LinkedHashMap<>();
         private final List<IndexDefinition> indexes = new ArrayList<>();
         private String keyField;
 
-        private Builder(String name) {
+        protected Builder(String name) {
             this.name = name;
         }
 
@@ -63,17 +73,83 @@ public final class ObjectTypes {
         }
 
         public ObjectTypeDefinition build() {
-            return new ObjectTypeDefinition(name, keyField, fields, indexes);
+            return new ObjectTypeDefinition(name, keyField, new ArrayList<>(fields.values()), indexes);
         }
 
-        private Builder addField(ObjectFieldDefinition field) {
-            fields.add(field);
+        protected Builder addField(ObjectFieldDefinition field) {
+            fields.put(field.name(), field);
             return this;
         }
 
-        private Builder addIndex(IndexDefinition index) {
+        protected Builder addIndex(IndexDefinition index) {
             indexes.add(index);
             return this;
+        }
+
+        protected Map<String, ObjectFieldDefinition> fields() {
+            return fields;
+        }
+    }
+
+    public static final class BeanBuilder extends Builder {
+        private BeanBuilder(Class<?> beanType) {
+            super(beanType.getSimpleName());
+            for (PropertyDescriptor descriptor : beanProperties(beanType)) {
+                ObjectFieldDefinition inferred = inferField(descriptor);
+                if (inferred != null) {
+                    addField(inferred);
+                }
+            }
+        }
+
+        @Override
+        public BeanBuilder key(String fieldName) {
+            super.key(fieldName);
+            ObjectFieldDefinition inferred = fields().get(fieldName);
+            if (inferred != null && inferred.type() == ValueType.STRING) {
+                addField(ObjectFieldDefinition.required(fieldName, ValueType.STRING));
+            }
+            return this;
+        }
+
+        @Override
+        public ScalarFieldBuilder string(String fieldName) {
+            return super.string(fieldName);
+        }
+
+        @Override
+        public ScalarFieldBuilder longNumber(String fieldName) {
+            return super.longNumber(fieldName);
+        }
+
+        @Override
+        public ScalarFieldBuilder doubleNumber(String fieldName) {
+            return super.doubleNumber(fieldName);
+        }
+
+        @Override
+        public ScalarFieldBuilder booleanFlag(String fieldName) {
+            return super.booleanFlag(fieldName);
+        }
+
+        @Override
+        public ReferenceFieldBuilder reference(String fieldName) {
+            return super.reference(fieldName);
+        }
+
+        @Override
+        public IndexBuilder index(String indexName) {
+            return super.index(indexName);
+        }
+
+        @Override
+        public IndexBuilder uniqueIndex(String indexName) {
+            return super.uniqueIndex(indexName);
+        }
+
+        @Override
+        public IndexBuilder orderedRangeIndex(String indexName) {
+            return super.orderedRangeIndex(indexName);
         }
     }
 
@@ -135,5 +211,52 @@ public final class ObjectTypes {
         public Builder on(String... fieldNames) {
             return parent.addIndex(new IndexDefinition(indexName, kind, List.of(fieldNames)));
         }
+    }
+
+    private static List<PropertyDescriptor> beanProperties(Class<?> beanType) {
+        try {
+            BeanInfo beanInfo = Introspector.getBeanInfo(beanType, Object.class);
+            List<PropertyDescriptor> properties = new ArrayList<>();
+            for (PropertyDescriptor descriptor : beanInfo.getPropertyDescriptors()) {
+                if (descriptor.getReadMethod() != null) {
+                    properties.add(descriptor);
+                }
+            }
+            return properties;
+        } catch (IntrospectionException e) {
+            throw new IllegalArgumentException("Failed to inspect bean type '" + beanType.getSimpleName() + "'", e);
+        }
+    }
+
+    private static ObjectFieldDefinition inferField(PropertyDescriptor descriptor) {
+        Class<?> propertyType = descriptor.getPropertyType();
+        String name = descriptor.getName();
+
+        if (propertyType == String.class) {
+            return ObjectFieldDefinition.optional(name, ValueType.STRING);
+        }
+        if (propertyType == long.class) {
+            return ObjectFieldDefinition.required(name, ValueType.LONG);
+        }
+        if (propertyType == int.class || propertyType == short.class || propertyType == byte.class) {
+            return ObjectFieldDefinition.required(name, ValueType.LONG);
+        }
+        if (propertyType == Long.class || propertyType == Integer.class
+                || propertyType == Short.class || propertyType == Byte.class) {
+            return ObjectFieldDefinition.optional(name, ValueType.LONG);
+        }
+        if (propertyType == double.class || propertyType == float.class) {
+            return ObjectFieldDefinition.required(name, ValueType.DOUBLE);
+        }
+        if (propertyType == Double.class || propertyType == Float.class) {
+            return ObjectFieldDefinition.optional(name, ValueType.DOUBLE);
+        }
+        if (propertyType == boolean.class) {
+            return ObjectFieldDefinition.required(name, ValueType.BOOLEAN);
+        }
+        if (propertyType == Boolean.class) {
+            return ObjectFieldDefinition.optional(name, ValueType.BOOLEAN);
+        }
+        return null;
     }
 }

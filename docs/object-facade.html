@@ -159,9 +159,10 @@
 <li>no bytecode enhancement</li>
 <li>no runtime schema inference</li>
 </ul>
-<p>Callers can use the object facade in two ways:</p>
+<p>Callers can use the object facade in three ways:</p>
 <ul>
 <li>define an <code>ObjectTypeDefinition</code> with the DSL and use the generated default codec for <code>Map&lt;String, Object&gt;</code> documents</li>
+<li>define an <code>ObjectTypeDefinition</code> with the DSL and register a JavaBean type for getter/setter-based object mapping</li>
 <li>define <code>ObjectType&lt;T&gt;</code> and supply a handwritten <code>ObjectCodec&lt;T&gt;</code> when you need full control</li>
 </ul>
 <h2 id="capabilities">Capabilities</h2>
@@ -177,7 +178,7 @@
 </ul>
 <p>The reserved <code>objectKey</code> field acts as the stable logical identity inside each type namespace.</p>
 <h2 id="example">Example</h2>
-<p>Start with the DSL and generated default codec unless you need custom encoding or rich domain-object mapping.</p>
+<p>Start with the DSL and generated default codec unless you need Java object mapping or custom encoding.</p>
 <pre><code class="language-java">ObjectTypeDefinition personDefinition = ObjectTypes.define("Person")
         .key("id")
         .string("id").required()
@@ -198,6 +199,80 @@ try (var store = NativeObjectStore.fileBacked("./data/object-store.dbs")) {
 </code></pre>
 <p>Generated object type definitions are persisted in the engine as reserved metadata entities, so the store can rehydrate them on reopen.</p>
 <p>That generated path should feel close to the server-side JSON experience. It is the default path for embedded callers when <code>Map&lt;String, Object&gt;</code> is enough.</p>
+<h2 id="javabeans">JavaBeans</h2>
+<p>If you want to work with Java objects without handwriting a codec, register a JavaBean and let Nexum infer the simple scalar fields from the bean class.</p>
+<p>Nexum uses standard JavaBean introspection, not broad field reflection. That keeps the mapping easy for common cases without turning object storage into hidden schema inference.</p>
+<pre><code class="language-java">public class PersonBean {
+    private String id;
+    private String name;
+    private long age;
+    private boolean active;
+
+    public PersonBean() {
+    }
+
+    public String getId() {
+        return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public long getAge() {
+        return age;
+    }
+
+    public void setAge(long age) {
+        this.age = age;
+    }
+
+    public boolean isActive() {
+        return active;
+    }
+
+    public void setActive(boolean active) {
+        this.active = active;
+    }
+}
+
+ObjectTypeDefinition personDefinition = ObjectTypes.define(PersonBean.class)
+        .key("id")
+        .index("person_name_idx").on("name")
+        .build();
+
+try (var store = NativeObjectStore.fileBacked("./data/object-store.dbs")) {
+    ObjectType&lt;PersonBean&gt; personType = store.registerBeanType(PersonBean.class, personDefinition);
+
+    PersonBean person = new PersonBean();
+    person.setId("person-1");
+    person.setName("Ada");
+    person.setAge(37L);
+    person.setActive(true);
+
+    store.save(personType, person);
+
+    StoredObject&lt;PersonBean&gt; loaded = store.get(personType, "person-1");
+    System.out.println(loaded.value().getName());
+}
+</code></pre>
+<p>Bean support works best when:</p>
+<ul>
+<li>the bean has a no-arg constructor</li>
+<li>each inferred or overridden field maps to a readable and writable bean property</li>
+<li>the key field is a string property</li>
+<li>you want a flat object model with standard getters and setters</li>
+</ul>
+<p>By default, <code>ObjectTypes.define(PersonBean.class)</code> infers <code>String</code>, integral numeric, floating-point numeric, and boolean bean properties. If you need references or tighter control, you can still override fields with the DSL before <code>build()</code>.</p>
+<p>If you want automatic mapping for arbitrary constructor-based POJOs, Nexum intentionally does not do that by default. Use the DSL <code>Map&lt;String, Object&gt;</code> path or a handwritten codec instead of relying on broad reflection.</p>
 <p>Reference fields use the same builder style:</p>
 <pre><code class="language-java">ObjectTypeDefinition personDefinition = ObjectTypes.define("Person")
         .key("id")

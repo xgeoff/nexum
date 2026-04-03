@@ -163,7 +163,7 @@ Key references:
 
 ## Object Mode
 
-Use the object facade when you want typed persistence. Start with the DSL and generated default codec for `Map<String, Object>` documents, then drop down to a handwritten codec only when you need custom encoding logic.
+Use the object facade when you want typed persistence. Start with the DSL and generated default codec for `Map<String, Object>` documents, use JavaBeans when you want getter/setter-based object mapping, and drop down to a handwritten codec only when you need custom encoding logic.
 
 ```java
 import biz.digitalindustry.storage.object.api.ObjectTypeDefinition;
@@ -194,6 +194,64 @@ try (var store = NativeObjectStore.fileBacked("./data/object.dbs")) {
 ```
 
 If you need explicit control over how a domain object is encoded and decoded, Nexum also supports a handwritten `ObjectCodec<T>`. That path is covered in the object facade reference.
+
+If you prefer Java objects over `Map<String, Object>`, but still want to avoid a handwritten codec, Nexum also supports a JavaBean path:
+
+```java
+import biz.digitalindustry.storage.object.api.ObjectTypeDefinition;
+import biz.digitalindustry.storage.object.api.ObjectTypes;
+import biz.digitalindustry.storage.object.engine.NativeObjectStore;
+
+public class PersonBean {
+    private String id;
+    private String name;
+    private long age;
+
+    public PersonBean() {
+    }
+
+    public String getId() {
+        return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public long getAge() {
+        return age;
+    }
+
+    public void setAge(long age) {
+        this.age = age;
+    }
+}
+
+ObjectTypeDefinition personDefinition = ObjectTypes.define(PersonBean.class)
+        .key("id")
+        .build();
+
+try (var store = NativeObjectStore.fileBacked("./data/object.dbs")) {
+    var personType = store.registerBeanType(PersonBean.class, personDefinition);
+
+    PersonBean person = new PersonBean();
+    person.setId("person-1");
+    person.setName("Ada");
+    person.setAge(37L);
+
+    store.save(personType, person);
+}
+```
+
+This bean path infers the simple scalar fields from the bean itself, so you only need to specify the key and any explicit overrides such as indexes or references. Nexum does not try to auto-map arbitrary POJOs by default; if you need constructor-based or custom object mapping, use a handwritten codec.
 
 Key references:
 

@@ -24,6 +24,7 @@ import org.junit.Test;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -283,6 +284,64 @@ public class NativeObjectStoreTest {
     }
 
     @Test
+    public void testRegisterBeanTypeSaveGetAndReopen() throws Exception {
+        openStore("native-bean-object-store");
+
+        ObjectTypeDefinition beanDefinition = ObjectTypes.define(PersonBean.class)
+                .key("id")
+                .build();
+
+        ObjectType<PersonBean> beanType = store.registerBeanType(PersonBean.class, beanDefinition);
+        PersonBean created = new PersonBean();
+        created.setId("person-1");
+        created.setName("Ada");
+        created.setAge(37L);
+        created.setActive(true);
+
+        store.save(beanType, created);
+
+        StoredObject<PersonBean> loaded = store.get(beanType, "person-1");
+        assertNotNull(loaded);
+        assertEquals("Ada", loaded.value().getName());
+        assertEquals(37L, loaded.value().getAge());
+        assertTrue(loaded.value().isActive());
+
+        store.close();
+        store = null;
+
+        store = new NativeObjectStore(dbPath.toString());
+        assertEquals("PersonBean", store.generatedTypeDefinitions().stream()
+                .filter(definition -> definition.name().equals("PersonBean"))
+                .findFirst()
+                .orElseThrow()
+                .name());
+
+        ObjectType<PersonBean> reopenedType = store.registerBeanType(PersonBean.class, beanDefinition);
+        StoredObject<PersonBean> reopened = store.get(reopenedType, "person-1");
+        assertNotNull(reopened);
+        assertEquals("Ada", reopened.value().getName());
+        assertEquals(37L, reopened.value().getAge());
+        assertTrue(reopened.value().isActive());
+    }
+
+    @Test
+    public void testRegisterBeanTypeRejectsMissingWritableProperty() throws Exception {
+        openStore("native-bean-invalid");
+
+        ObjectTypeDefinition invalidDefinition = ObjectTypes.define(ReadOnlyPersonBean.class)
+                .key("id")
+                .build();
+
+        try {
+            store.registerBeanType(ReadOnlyPersonBean.class, invalidDefinition);
+        } catch (IllegalArgumentException e) {
+            assertTrue(e.getMessage().contains("writable property"));
+            return;
+        }
+        throw new AssertionError("Expected registerBeanType to reject read-only bean properties");
+    }
+
+    @Test
     public void testReaderDuringWriteSeesLastCommittedObjectState() throws Exception {
         openStore("native-object-overlap");
 
@@ -360,5 +419,63 @@ public class NativeObjectStoreTest {
     }
 
     private record Person(String id, String name, long age, Address address) {
+    }
+
+    public static class PersonBean {
+        private String id;
+        private String name;
+        private long age;
+        private boolean active;
+
+        public PersonBean() {
+        }
+
+        public String getId() {
+            return id;
+        }
+
+        public void setId(String id) {
+            this.id = id;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        public long getAge() {
+            return age;
+        }
+
+        public void setAge(long age) {
+            this.age = age;
+        }
+
+        public boolean isActive() {
+            return active;
+        }
+
+        public void setActive(boolean active) {
+            this.active = active;
+        }
+    }
+
+    public static class ReadOnlyPersonBean {
+        private final String id = "person-1";
+        private final String name = "Ada";
+
+        public ReadOnlyPersonBean() {
+        }
+
+        public String getId() {
+            return id;
+        }
+
+        public String getName() {
+            return name;
+        }
     }
 }
