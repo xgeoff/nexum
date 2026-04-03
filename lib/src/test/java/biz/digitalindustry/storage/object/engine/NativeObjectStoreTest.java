@@ -342,6 +342,61 @@ public class NativeObjectStoreTest {
     }
 
     @Test
+    public void testSaveAndGetMappedPojoByRegisteredDefinition() throws Exception {
+        openStore("native-mapped-pojo");
+
+        ObjectTypeDefinition personDefinition = ObjectTypes.define("Person")
+                .key("id")
+                .string("id").required()
+                .string("name").required()
+                .longNumber("age").required()
+                .build();
+        store.registerGeneratedType(personDefinition);
+
+        ObjectTypeDefinition storedDefinition = store.generatedTypeDefinition("Person");
+        assertNotNull(storedDefinition);
+
+        PublicPersonPojo person = new PublicPersonPojo();
+        person.id = "person-1";
+        person.name = "Ada";
+        person.age = 37L;
+
+        StoredObject<PublicPersonPojo> saved = store.save(storedDefinition, person);
+        assertNotNull(saved);
+        assertEquals("person-1", saved.key());
+
+        StoredObject<PublicPersonPojo> loaded = store.get(storedDefinition, PublicPersonPojo.class, "person-1");
+        assertNotNull(loaded);
+        assertEquals("Ada", loaded.value().name);
+        assertEquals(37L, loaded.value().age);
+    }
+
+    @Test
+    public void testGetMappedPojoCanProjectRegisteredTypeIntoDifferentShape() throws Exception {
+        openStore("native-mapped-projection");
+
+        ObjectTypeDefinition personDefinition = ObjectTypes.define("Person")
+                .key("id")
+                .string("id").required()
+                .string("name").required()
+                .longNumber("age").required()
+                .build();
+        ObjectType<Map<String, Object>> personType = store.registerGeneratedType(personDefinition);
+        store.save(personType, Map.of(
+                "id", "person-1",
+                "name", "Ada",
+                "age", 37L
+        ));
+
+        ObjectTypeDefinition storedDefinition = store.generatedTypeDefinition("Person");
+        PersonBean projected = store.get(storedDefinition, PersonBean.class, "person-1").value();
+        assertNotNull(projected);
+        assertEquals("person-1", projected.getId());
+        assertEquals("Ada", projected.getName());
+        assertEquals(37L, projected.getAge());
+    }
+
+    @Test
     public void testReaderDuringWriteSeesLastCommittedObjectState() throws Exception {
         openStore("native-object-overlap");
 
@@ -476,6 +531,15 @@ public class NativeObjectStoreTest {
 
         public String getName() {
             return name;
+        }
+    }
+
+    public static class PublicPersonPojo {
+        public String id;
+        public String name;
+        public long age;
+
+        public PublicPersonPojo() {
         }
     }
 }

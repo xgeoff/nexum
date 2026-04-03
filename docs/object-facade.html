@@ -159,10 +159,11 @@
 <li>no bytecode enhancement</li>
 <li>no runtime schema inference</li>
 </ul>
-<p>Callers can use the object facade in three ways:</p>
+<p>Callers can use the object facade in four ways:</p>
 <ul>
 <li>define an <code>ObjectTypeDefinition</code> with the DSL and use the generated default codec for <code>Map&lt;String, Object&gt;</code> documents</li>
 <li>define an <code>ObjectTypeDefinition</code> with the DSL and register a JavaBean type for getter/setter-based object mapping</li>
+<li>retrieve a registered <code>ObjectTypeDefinition</code> from the store and map it onto a JavaBean or public-field POJO at runtime</li>
 <li>define <code>ObjectType&lt;T&gt;</code> and supply a handwritten <code>ObjectCodec&lt;T&gt;</code> when you need full control</li>
 </ul>
 <h2 id="capabilities">Capabilities</h2>
@@ -273,6 +274,54 @@ try (var store = NativeObjectStore.fileBacked("./data/object-store.dbs")) {
 </ul>
 <p>By default, <code>ObjectTypes.define(PersonBean.class)</code> infers <code>String</code>, integral numeric, floating-point numeric, and boolean bean properties. If you need references or tighter control, you can still override fields with the DSL before <code>build()</code>.</p>
 <p>If you want automatic mapping for arbitrary constructor-based POJOs, Nexum intentionally does not do that by default. Use the DSL <code>Map&lt;String, Object&gt;</code> path or a handwritten codec instead of relying on broad reflection.</p>
+<h2 id="registered-definition-mapping">Registered Definition Mapping</h2>
+<p>Once a generated object type has been registered, the store can use that persisted definition to map runtime objects without requiring a separate codec registration.</p>
+<p>That means you can:</p>
+<ul>
+<li>save a JavaBean through its getters and setters</li>
+<li>save a plain Java object through non-final public fields</li>
+<li>read the same stored object back into either shape later</li>
+</ul>
+<pre><code class="language-java">public class PersonPojo {
+    public String id;
+    public String name;
+    public long age;
+
+    public PersonPojo() {
+    }
+}
+
+ObjectTypeDefinition personDefinition = ObjectTypes.define("Person")
+        .key("id")
+        .string("id").required()
+        .string("name").required()
+        .longNumber("age").required()
+        .build();
+
+try (var store = NativeObjectStore.fileBacked("./data/object-store.dbs")) {
+    store.registerGeneratedType(personDefinition);
+
+    ObjectTypeDefinition storedDefinition = store.generatedTypeDefinition("Person");
+
+    PersonPojo person = new PersonPojo();
+    person.id = "person-1";
+    person.name = "Ada";
+    person.age = 37L;
+
+    store.save(storedDefinition, person);
+
+    StoredObject&lt;PersonPojo&gt; loaded = store.get(storedDefinition, PersonPojo.class, "person-1");
+    System.out.println(loaded.value().name);
+}
+</code></pre>
+<p>Runtime mapped-object support works when:</p>
+<ul>
+<li>the object type definition is already registered in the store</li>
+<li>the class has a no-arg constructor for decode</li>
+<li>each schema field maps to either a readable/writable bean property or a non-final public field</li>
+<li>reference fields map to <code>Map&lt;String, Object&gt;</code> values shaped like <code>{ "type": "...", "key": "..." }</code></li>
+</ul>
+<p>This path is schema-driven. Nexum does not scan arbitrary private fields or infer hidden structure from the class.</p>
 <p>Reference fields use the same builder style:</p>
 <pre><code class="language-java">ObjectTypeDefinition personDefinition = ObjectTypes.define("Person")
         .key("id")

@@ -132,6 +132,47 @@ public class NativeObjectStore implements ObjectStore {
         });
     }
 
+    public <T> StoredObject<T> save(ObjectTypeDefinition definition, T object) {
+        return writeLocked(() -> {
+            ObjectTypeDefinition registeredDefinition = requireGeneratedDefinition(definition);
+            @SuppressWarnings("unchecked")
+            Class<T> mappedType = (Class<T>) object.getClass();
+            ObjectType<T> type = GeneratedObjectTypes.createMapped(
+                    mappedType,
+                    registeredDefinition,
+                    this::generatedType,
+                    this::generatedTypeDefinition
+            );
+            return saveUnchecked(type, object);
+        });
+    }
+
+    public <T> StoredObject<T> get(ObjectTypeDefinition definition, Class<T> mappedType, String key) {
+        return readLocked(() -> {
+            ObjectTypeDefinition registeredDefinition = requireGeneratedDefinition(definition);
+            ObjectType<T> type = GeneratedObjectTypes.createMapped(
+                    mappedType,
+                    registeredDefinition,
+                    this::generatedType,
+                    this::generatedTypeDefinition
+            );
+            return getUnchecked(type, key);
+        });
+    }
+
+    public <T> List<StoredObject<T>> getAll(ObjectTypeDefinition definition, Class<T> mappedType) {
+        return readLocked(() -> {
+            ObjectTypeDefinition registeredDefinition = requireGeneratedDefinition(definition);
+            ObjectType<T> type = GeneratedObjectTypes.createMapped(
+                    mappedType,
+                    registeredDefinition,
+                    this::generatedType,
+                    this::generatedTypeDefinition
+            );
+            return getAllUnchecked(type);
+        });
+    }
+
     public List<ObjectTypeDefinition> generatedTypeDefinitions() {
         return readLocked(() -> List.copyOf(generatedDefinitions.values()));
     }
@@ -149,23 +190,7 @@ public class NativeObjectStore implements ObjectStore {
     public <T> StoredObject<T> save(ObjectType<T> type, T object) {
         return writeLocked(() -> {
             requireRegistered(type);
-            try (Transaction tx = storageEngine.begin(TransactionMode.READ_WRITE)) {
-                String key = type.codec().key(object);
-                Record existing = findRecordByKey(type, key);
-                RecordStore recordStore = storageEngine.recordStore();
-                Map<String, FieldValue> encodedFields = withObjectKey(key, type.codec().encode(object, new NativeObjectStoreContext()));
-                Record stored;
-                if (existing == null) {
-                    stored = recordStore.create(type.entityType(), new Record(null, type.entityType(), encodedFields));
-                } else {
-                    stored = new Record(existing.id(), type.entityType(), encodedFields);
-                    recordStore.update(stored);
-                    removeFromIndexes(type, existing);
-                }
-                addToIndexes(type, stored);
-                tx.commit();
-                return toStoredObject(type, stored);
-            }
+            return saveUnchecked(type, object);
         });
     }
 
@@ -173,7 +198,7 @@ public class NativeObjectStore implements ObjectStore {
     public <T> StoredObject<T> get(ObjectType<T> type, String key) {
         return readLocked(() -> {
             requireRegistered(type);
-            return toStoredObject(type, findRecordByKey(type, key));
+            return getUnchecked(type, key);
         });
     }
 
@@ -181,11 +206,7 @@ public class NativeObjectStore implements ObjectStore {
     public <T> List<StoredObject<T>> getAll(ObjectType<T> type) {
         return readLocked(() -> {
             requireRegistered(type);
-            List<StoredObject<T>> objects = new ArrayList<>();
-            for (Record record : storageEngine.recordStore().scan(type.entityType())) {
-                objects.add(toStoredObject(type, record));
-            }
-            return objects;
+            return getAllUnchecked(type);
         });
     }
 
@@ -402,6 +423,49 @@ public class NativeObjectStore implements ObjectStore {
             persistDefinition(definition);
         }
         generatedDefinitions.put(definition.name(), definition);
+    }
+
+    private ObjectTypeDefinition requireGeneratedDefinition(ObjectTypeDefinition definition) {
+        ObjectTypeDefinition registered = generatedDefinitions.get(definition.name());
+        if (registered == null) {
+            throw new IllegalStateException("Generated object type '" + definition.name() + "' is not registered in this store");
+        }
+        if (!registered.equals(definition)) {
+            throw new IllegalArgumentException("Generated object type '" + definition.name() + "' does not match the registered definition");
+        }
+        return registered;
+    }
+
+    private <T> StoredObject<T> saveUnchecked(ObjectType<T> type, T object) {
+        try (Transaction tx = storageEngine.begin(TransactionMode.READ_WRITE)) {
+            String key = type.codec().key(object);
+            Record existing = findRecordByKey(type, key);
+            RecordStore recordStore = storageEngine.recordStore();
+            Map<String, FieldValue> encodedFields = withObjectKey(key, type.codec().encode(object, new NativeObjectStoreContext()));
+            Record stored;
+            if (existing == null) {
+                stored = recordStore.create(type.entityType(), new Record(null, type.entityType(), encodedFields));
+            } else {
+                stored = new Record(existing.id(), type.entityType(), encodedFields);
+                recordStore.update(stored);
+                removeFromIndexes(type, existing);
+            }
+            addToIndexes(type, stored);
+            tx.commit();
+            return toStoredObject(type, stored);
+        }
+    }
+
+    private <T> StoredObject<T> getUnchecked(ObjectType<T> type, String key) {
+        return toStoredObject(type, findRecordByKey(type, key));
+    }
+
+    private <T> List<StoredObject<T>> getAllUnchecked(ObjectType<T> type) {
+        List<StoredObject<T>> objects = new ArrayList<>();
+        for (Record record : storageEngine.recordStore().scan(type.entityType())) {
+            objects.add(toStoredObject(type, record));
+        }
+        return objects;
     }
 
     private void deleteDefinitionRecords(String typeName) {

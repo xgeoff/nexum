@@ -253,6 +253,48 @@ try (var store = NativeObjectStore.fileBacked("./data/object.dbs")) {
 
 This bean path infers the simple scalar fields from the bean itself, so you only need to specify the key and any explicit overrides such as indexes or references. Nexum does not try to auto-map arbitrary POJOs by default; if you need constructor-based or custom object mapping, use a handwritten codec.
 
+If you have already registered an object definition and want to save a plain Java object without a separate codec, you can map against the stored definition directly:
+
+```java
+import biz.digitalindustry.storage.object.api.ObjectTypeDefinition;
+import biz.digitalindustry.storage.object.api.ObjectTypes;
+import biz.digitalindustry.storage.object.engine.NativeObjectStore;
+
+public class PersonPojo {
+    public String id;
+    public String name;
+    public long age;
+
+    public PersonPojo() {
+    }
+}
+
+ObjectTypeDefinition personDefinition = ObjectTypes.define("Person")
+        .key("id")
+        .string("id").required()
+        .string("name").required()
+        .longNumber("age").required()
+        .build();
+
+try (var store = NativeObjectStore.fileBacked("./data/object.dbs")) {
+    store.registerGeneratedType(personDefinition);
+
+    ObjectTypeDefinition storedDefinition = store.generatedTypeDefinition("Person");
+
+    PersonPojo person = new PersonPojo();
+    person.id = "person-1";
+    person.name = "Ada";
+    person.age = 37L;
+
+    store.save(storedDefinition, person);
+
+    var loaded = store.get(storedDefinition, PersonPojo.class, "person-1");
+    System.out.println(loaded.value().name);
+}
+```
+
+This mapped-object path supports JavaBeans and non-final public fields. Private-field POJOs are intentionally not auto-mapped.
+
 Key references:
 
 - [`ObjectStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectStore.java)

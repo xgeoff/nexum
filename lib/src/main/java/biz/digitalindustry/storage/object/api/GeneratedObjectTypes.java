@@ -16,7 +16,9 @@ import java.beans.IntrospectionException;
 import java.beans.Introspector;
 import java.beans.PropertyDescriptor;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -57,6 +59,22 @@ public final class GeneratedObjectTypes {
         }
         List<IndexDefinition> indexes = List.copyOf(definition.indexes());
         return new ObjectType<>(definition.name(), fields, indexes, new BeanObjectCodec<>(definition, binding, typeResolver, definitionResolver));
+    }
+
+    public static <T> ObjectType<T> createMapped(
+            Class<T> mappedType,
+            ObjectTypeDefinition definition,
+            Function<String, ObjectType<Map<String, Object>>> typeResolver,
+            Function<String, ObjectTypeDefinition> definitionResolver
+    ) {
+        validateDefinition(definition);
+        MappedBinding<T> binding = MappedBinding.create(mappedType, definition);
+        List<FieldDefinition> fields = new ArrayList<>();
+        for (ObjectFieldDefinition field : definition.fields()) {
+            fields.add(new FieldDefinition(field.name(), field.type(), field.required(), field.repeated()));
+        }
+        List<IndexDefinition> indexes = List.copyOf(definition.indexes());
+        return new ObjectType<>(definition.name(), fields, indexes, new MappedObjectCodec<>(definition, binding, typeResolver, definitionResolver));
     }
 
     public static void validateDocumentDefinition(
@@ -483,6 +501,218 @@ public final class GeneratedObjectTypes {
         }
     }
 
+    private interface Accessor {
+        String name();
+
+        Class<?> type();
+
+        Object read(Object instance);
+
+        void write(Object instance, Object value);
+    }
+
+    private static final class PropertyAccessor implements Accessor {
+        private final String name;
+        private final PropertyDescriptor descriptor;
+        private final String ownerName;
+
+        private PropertyAccessor(String name, PropertyDescriptor descriptor, String ownerName) {
+            this.name = name;
+            this.descriptor = descriptor;
+            this.ownerName = ownerName;
+        }
+
+        @Override
+        public String name() {
+            return name;
+        }
+
+        @Override
+        public Class<?> type() {
+            return descriptor.getPropertyType();
+        }
+
+        @Override
+        public Object read(Object instance) {
+            try {
+                return descriptor.getReadMethod().invoke(instance);
+            } catch (IllegalAccessException | InvocationTargetException e) {
+                throw new IllegalArgumentException("Failed to read property '" + name + "' from '" + ownerName + "'", e);
+            }
+        }
+
+        @Override
+        public void write(Object instance, Object value) {
+            try {
+                descriptor.getWriteMethod().invoke(instance, value);
+            } catch (IllegalAccessException | InvocationTargetException e) {
+                throw new IllegalArgumentException("Failed to write property '" + name + "' on '" + ownerName + "'", e);
+            }
+        }
+    }
+
+    private static final class PublicFieldAccessor implements Accessor {
+        private final Field field;
+        private final String ownerName;
+
+        private PublicFieldAccessor(Field field, String ownerName) {
+            this.field = field;
+            this.ownerName = ownerName;
+        }
+
+        @Override
+        public String name() {
+            return field.getName();
+        }
+
+        @Override
+        public Class<?> type() {
+            return field.getType();
+        }
+
+        @Override
+        public Object read(Object instance) {
+            try {
+                return field.get(instance);
+            } catch (IllegalAccessException e) {
+                throw new IllegalArgumentException("Failed to read public field '" + field.getName() + "' from '" + ownerName + "'", e);
+            }
+        }
+
+        @Override
+        public void write(Object instance, Object value) {
+            try {
+                field.set(instance, value);
+            } catch (IllegalAccessException e) {
+                throw new IllegalArgumentException("Failed to write public field '" + field.getName() + "' on '" + ownerName + "'", e);
+            }
+        }
+    }
+
+    private static final class MappedBinding<T> {
+        private final Class<T> mappedType;
+        private final Constructor<T> constructor;
+        private final Map<String, Accessor> accessorsByField;
+
+        private MappedBinding(Class<T> mappedType, Constructor<T> constructor, Map<String, Accessor> accessorsByField) {
+            this.mappedType = mappedType;
+            this.constructor = constructor;
+            this.accessorsByField = accessorsByField;
+        }
+
+        private static <T> MappedBinding<T> create(Class<T> mappedType, ObjectTypeDefinition definition) {
+            Constructor<T> constructor = BeanBinding.defaultConstructor(mappedType);
+            Map<String, PropertyDescriptor> beanProperties = BeanBinding.introspect(mappedType);
+            Map<String, Field> publicFields = publicFields(mappedType);
+            Map<String, Accessor> accessors = new LinkedHashMap<>();
+
+            for (ObjectFieldDefinition field : definition.fields()) {
+                Accessor accessor = accessorFor(mappedType, field, beanProperties, publicFields);
+                validateAccessorType(accessor, field, mappedType.getSimpleName());
+                accessors.put(field.name(), accessor);
+            }
+            return new MappedBinding<>(mappedType, constructor, accessors);
+        }
+
+        private Map<String, Object> extractDocument(T object, ObjectTypeDefinition definition) {
+            Map<String, Object> document = new LinkedHashMap<>();
+            for (ObjectFieldDefinition field : definition.fields()) {
+                document.put(field.name(), accessorsByField.get(field.name()).read(object));
+            }
+            return document;
+        }
+
+        private T instantiate(Map<String, Object> values, ObjectTypeDefinition definition) {
+            T instance;
+            try {
+                instance = constructor.newInstance();
+            } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
+                throw new IllegalArgumentException("Failed to instantiate mapped type '" + mappedType.getSimpleName() + "'", e);
+            }
+            for (ObjectFieldDefinition field : definition.fields()) {
+                Accessor accessor = accessorsByField.get(field.name());
+                Object adapted = adaptValueForProperty(values.get(field.name()), accessor.type(), field);
+                accessor.write(instance, adapted);
+            }
+            return instance;
+        }
+
+        private static <T> Accessor accessorFor(
+                Class<T> mappedType,
+                ObjectFieldDefinition field,
+                Map<String, PropertyDescriptor> beanProperties,
+                Map<String, Field> publicFields
+        ) {
+            PropertyDescriptor descriptor = beanProperties.get(field.name());
+            if (descriptor != null && descriptor.getReadMethod() != null && descriptor.getWriteMethod() != null) {
+                return new PropertyAccessor(field.name(), descriptor, mappedType.getSimpleName());
+            }
+            Field publicField = publicFields.get(field.name());
+            if (publicField != null && !Modifier.isFinal(publicField.getModifiers())) {
+                return new PublicFieldAccessor(publicField, mappedType.getSimpleName());
+            }
+            throw new IllegalArgumentException("Mapped type '" + mappedType.getSimpleName() + "' must expose field '" + field.name()
+                    + "' as a readable/writable bean property or non-final public field");
+        }
+
+        private static Map<String, Field> publicFields(Class<?> mappedType) {
+            Map<String, Field> fields = new LinkedHashMap<>();
+            for (Field field : mappedType.getFields()) {
+                if (Modifier.isPublic(field.getModifiers())) {
+                    fields.put(field.getName(), field);
+                }
+            }
+            return fields;
+        }
+
+        private static void validateAccessorType(Accessor accessor, ObjectFieldDefinition field, String ownerName) {
+            Class<?> propertyType = accessor.type();
+            switch (field.type()) {
+                case STRING -> {
+                    if (!(propertyType == String.class || propertyType == Object.class)) {
+                        throw new IllegalArgumentException("Field '" + field.name() + "' on '" + ownerName + "' must map to a String member");
+                    }
+                }
+                case LONG -> {
+                    if (!(propertyType == long.class
+                            || propertyType == Long.class
+                            || propertyType == int.class
+                            || propertyType == Integer.class
+                            || propertyType == short.class
+                            || propertyType == Short.class
+                            || propertyType == byte.class
+                            || propertyType == Byte.class
+                            || propertyType == Object.class)) {
+                        throw new IllegalArgumentException("Field '" + field.name() + "' on '" + ownerName + "' must map to an integral numeric member");
+                    }
+                }
+                case DOUBLE -> {
+                    if (!(propertyType == double.class
+                            || propertyType == Double.class
+                            || propertyType == float.class
+                            || propertyType == Float.class
+                            || propertyType == Object.class)) {
+                        throw new IllegalArgumentException("Field '" + field.name() + "' on '" + ownerName + "' must map to a floating-point numeric member");
+                    }
+                }
+                case BOOLEAN -> {
+                    if (!(propertyType == boolean.class || propertyType == Boolean.class || propertyType == Object.class)) {
+                        throw new IllegalArgumentException("Field '" + field.name() + "' on '" + ownerName + "' must map to a boolean member");
+                    }
+                }
+                case REFERENCE -> {
+                    if (!(propertyType == Object.class || propertyType.isAssignableFrom(Map.class))) {
+                        throw new IllegalArgumentException("Reference field '" + field.name() + "' on '" + ownerName + "' must map to a Map-like member");
+                    }
+                }
+                default -> throw new IllegalArgumentException("Unsupported field type '" + field.type().name().toLowerCase() + "'");
+            }
+            if (Collection.class.isAssignableFrom(propertyType)) {
+                throw new IllegalArgumentException("Collection-valued members are not supported for field '" + field.name() + "'");
+            }
+        }
+    }
+
     private static final class GeneratedObjectCodec implements ObjectCodec<Map<String, Object>> {
         private final ObjectTypeDefinition definition;
         private final Function<String, ObjectType<Map<String, Object>>> typeResolver;
@@ -570,6 +800,67 @@ public final class GeneratedObjectTypes {
         @Override
         public Map<String, FieldValue> encode(T object, ObjectStoreContext context) {
             Map<String, Object> document = binding.extractDocument(object);
+            Map<String, Object> normalized = normalizeDocument(definition, key(object), document, this::definitionFor);
+            Map<String, FieldValue> encoded = new LinkedHashMap<>();
+            for (ObjectFieldDefinition field : definition.fields()) {
+                Object value = normalized.get(field.name());
+                if (value == null) {
+                    continue;
+                }
+                encoded.put(field.name(), toFieldValue(field, value, context, typeResolver, this::definitionFor));
+            }
+            return encoded;
+        }
+
+        @Override
+        public T decode(StoredObjectView view, ObjectStoreContext context) {
+            Map<String, Object> decoded = new LinkedHashMap<>();
+            for (ObjectFieldDefinition field : definition.fields()) {
+                Object value = fromFieldValue(field, view.fields().get(field.name()), context, typeResolver, this::definitionFor);
+                if (value != null) {
+                    decoded.put(field.name(), value);
+                }
+            }
+            decoded.putIfAbsent(definition.keyField(), view.key());
+            return binding.instantiate(decoded, definition);
+        }
+
+        private ObjectTypeDefinition definitionFor(String typeName) {
+            return definitionResolver.apply(typeName);
+        }
+    }
+
+    private static final class MappedObjectCodec<T> implements ObjectCodec<T> {
+        private final ObjectTypeDefinition definition;
+        private final MappedBinding<T> binding;
+        private final Function<String, ObjectType<Map<String, Object>>> typeResolver;
+        private final Function<String, ObjectTypeDefinition> definitionResolver;
+
+        private MappedObjectCodec(
+                ObjectTypeDefinition definition,
+                MappedBinding<T> binding,
+                Function<String, ObjectType<Map<String, Object>>> typeResolver,
+                Function<String, ObjectTypeDefinition> definitionResolver
+        ) {
+            this.definition = definition;
+            this.binding = binding;
+            this.typeResolver = typeResolver;
+            this.definitionResolver = definitionResolver;
+        }
+
+        @Override
+        public String key(T object) {
+            Map<String, Object> document = binding.extractDocument(object, definition);
+            Object value = document.get(definition.keyField());
+            if (!(value instanceof String key) || key.isBlank()) {
+                throw new IllegalArgumentException("Mapped object must expose key field '" + definition.keyField() + "' as a non-empty string");
+            }
+            return key;
+        }
+
+        @Override
+        public Map<String, FieldValue> encode(T object, ObjectStoreContext context) {
+            Map<String, Object> document = binding.extractDocument(object, definition);
             Map<String, Object> normalized = normalizeDocument(definition, key(object), document, this::definitionFor);
             Map<String, FieldValue> encoded = new LinkedHashMap<>();
             for (ObjectFieldDefinition field : definition.fields()) {
