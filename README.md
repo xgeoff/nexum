@@ -2,9 +2,10 @@
 
 Nexum is a native embedded multi-model database implemented under `biz.digitalindustry.storage.*`.
 
-The repository now has two active modules:
+The repository now has three active modules:
 
 - `lib`: native storage engine plus graph, object, relational, and query modules
+- `jackson`: optional Jackson DTO adapter over the lib-owned object facade
 - `server`: Micronaut HTTP transport over the lib-owned query and maintenance layers
 
 ## Current Architecture
@@ -117,6 +118,13 @@ var objectStore = biz.digitalindustry.storage.object.engine.NativeObjectStore.fi
 var objectMemory = biz.digitalindustry.storage.object.engine.NativeObjectStore.memoryOnly();
 ```
 
+Optional Jackson adapter example:
+
+```java
+var jackson = new biz.digitalindustry.storage.jackson.JacksonAdapter("./data/app-object.dbs");
+jackson.register(PersonDto.class, "id");
+```
+
 Embedded query-provider examples:
 
 ```java
@@ -166,6 +174,7 @@ See [`server-query-guide.md`](site/pages/server-query-guide.md) for the exact su
 - [`unified-engine-model.md`](site/pages/unified-engine-model.md)
 - [`concurrency-model.md`](site/pages/concurrency-model.md)
 - [`object-facade.md`](site/pages/object-facade.md)
+- [`jackson-adapter.md`](site/pages/jackson-adapter.md)
 - [`relational-facade.md`](site/pages/relational-facade.md)
 - [`server-query-guide.md`](site/pages/server-query-guide.md)
 

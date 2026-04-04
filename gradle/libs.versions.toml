@@ -5,8 +5,10 @@
 groovy = "3.0.24"
 junit = "4.13.2"
 spock-core = "2.2-groovy-3.0"
+jackson = "2.17.2"
 
 [libraries]
 groovy = { module = "org.codehaus.groovy:groovy", version.ref = "groovy" }
 junit = { module = "junit:junit", version.ref = "junit" }
 spock-core = { module = "org.spockframework:spock-core", version.ref = "spock-core" }
+jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson" }

@@ -77,6 +77,16 @@
 
 
 
+<li class="sidebar__file"><a href="/nexum/jackson-adapter.html">Jackson Adapter</a></li>
+
+
+        
+            
+
+
+
+
+
 <li class="sidebar__file"><a href="/nexum/object-facade.html">Object Facade</a></li>
 
 
@@ -159,11 +169,12 @@
 <li>no bytecode enhancement</li>
 <li>no runtime schema inference</li>
 </ul>
-<p>Callers can use the object facade in four ways:</p>
+<p>Callers can use the object facade in five ways:</p>
 <ul>
 <li>define an <code>ObjectTypeDefinition</code> with the DSL and use the generated default codec for <code>Map&lt;String, Object&gt;</code> documents</li>
 <li>define an <code>ObjectTypeDefinition</code> with the DSL and register a JavaBean type for getter/setter-based object mapping</li>
 <li>retrieve a registered <code>ObjectTypeDefinition</code> from the store and map it onto a JavaBean or public-field POJO at runtime</li>
+<li>add the optional Jackson adapter when you want DTO-first registration and storage</li>
 <li>define <code>ObjectType&lt;T&gt;</code> and supply a handwritten <code>ObjectCodec&lt;T&gt;</code> when you need full control</li>
 </ul>
 <h2 id="capabilities">Capabilities</h2>
@@ -178,6 +189,7 @@
 <li>typed reference resolution through <code>ReferenceValue</code></li>
 </ul>
 <p>The reserved <code>objectKey</code> field acts as the stable logical identity inside each type namespace.</p>
+<p>If your application already uses Jackson DTOs, see the dedicated <a href="jackson-adapter.md"><code>jackson-adapter.md</code></a> page for the thinner <code>register/save/get</code> integration layer.</p>
 <h2 id="example">Example</h2>
 <p>Start with the DSL and generated default codec unless you need Java object mapping or custom encoding.</p>
 <pre><code class="language-java">ObjectTypeDefinition personDefinition = ObjectTypes.define("Person")
@@ -273,7 +285,7 @@ try (var store = NativeObjectStore.fileBacked("./data/object-store.dbs")) {
 <li>you want a flat object model with standard getters and setters</li>
 </ul>
 <p>By default, <code>ObjectTypes.define(PersonBean.class)</code> infers <code>String</code>, integral numeric, floating-point numeric, and boolean bean properties. If you need references or tighter control, you can still override fields with the DSL before <code>build()</code>.</p>
-<p>If you want automatic mapping for arbitrary constructor-based POJOs, Nexum intentionally does not do that by default. Use the DSL <code>Map&lt;String, Object&gt;</code> path or a handwritten codec instead of relying on broad reflection.</p>
+<p>If you want broader POJO mapping than the native bean and public-field support, use the optional <a href="jackson-adapter.md"><code>nexum-jackson</code></a> adapter. It pulls in Jackson deliberately and gives you a smoother DTO and record workflow when your application already uses Jackson for object mapping.</p>
 <h2 id="registered-definition-mapping">Registered Definition Mapping</h2>
 <p>Once a generated object type has been registered, the store can use that persisted definition to map runtime objects without requiring a separate codec registration.</p>
 <p>That means you can:</p>
@@ -322,6 +334,7 @@ try (var store = NativeObjectStore.fileBacked("./data/object-store.dbs")) {
 <li>reference fields map to <code>Map&lt;String, Object&gt;</code> values shaped like <code>{ "type": "...", "key": "..." }</code></li>
 </ul>
 <p>This path is schema-driven. Nexum does not scan arbitrary private fields or infer hidden structure from the class.</p>
+<p>If you need broader POJO support than this schema-driven native path, see the optional <a href="jackson-adapter.md"><code>nexum-jackson</code></a> module.</p>
 <p>Reference fields use the same builder style:</p>
 <pre><code class="language-java">ObjectTypeDefinition personDefinition = ObjectTypes.define("Person")
         .key("id")

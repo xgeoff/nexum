@@ -36,11 +36,12 @@ The facade is explicit:
 - no bytecode enhancement
 - no runtime schema inference
 
-Callers can use the object facade in four ways:
+Callers can use the object facade in five ways:
 
 - define an `ObjectTypeDefinition` with the DSL and use the generated default codec for `Map<String, Object>` documents
 - define an `ObjectTypeDefinition` with the DSL and register a JavaBean type for getter/setter-based object mapping
 - retrieve a registered `ObjectTypeDefinition` from the store and map it onto a JavaBean or public-field POJO at runtime
+- add the optional Jackson adapter when you want DTO-first registration and storage
 - define `ObjectType<T>` and supply a handwritten `ObjectCodec<T>` when you need full control
 
 ## Capabilities
@@ -56,6 +57,8 @@ Current API surface:
 - typed reference resolution through `ReferenceValue`
 
 The reserved `objectKey` field acts as the stable logical identity inside each type namespace.
+
+If your application already uses Jackson DTOs, see the dedicated [`jackson-adapter.md`](jackson-adapter.md) page for the thinner `register/save/get` integration layer.
 
 ## Example
 
@@ -164,7 +167,7 @@ Bean support works best when:
 
 By default, `ObjectTypes.define(PersonBean.class)` infers `String`, integral numeric, floating-point numeric, and boolean bean properties. If you need references or tighter control, you can still override fields with the DSL before `build()`.
 
-If you want automatic mapping for arbitrary constructor-based POJOs, Nexum intentionally does not do that by default. Use the DSL `Map<String, Object>` path or a handwritten codec instead of relying on broad reflection.
+If you want broader POJO mapping than the native bean and public-field support, use the optional [`nexum-jackson`](jackson-adapter.md) adapter. It pulls in Jackson deliberately and gives you a smoother DTO and record workflow when your application already uses Jackson for object mapping.
 
 ## Registered Definition Mapping
 
@@ -218,6 +221,8 @@ Runtime mapped-object support works when:
 - reference fields map to `Map<String, Object>` values shaped like `{ "type": "...", "key": "..." }`
 
 This path is schema-driven. Nexum does not scan arbitrary private fields or infer hidden structure from the class.
+
+If you need broader POJO support than this schema-driven native path, see the optional [`nexum-jackson`](jackson-adapter.md) module.
 
 Reference fields use the same builder style:
 

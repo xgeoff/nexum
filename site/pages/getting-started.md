@@ -30,6 +30,12 @@ Build the core library jar:
 ./gradlew :lib:jar
 ```
 
+Build the optional Jackson adapter jar:
+
+```bash
+./gradlew :jackson:jar
+```
+
 Build the optional server jar:
 
 ```bash
@@ -39,6 +45,7 @@ Build the optional server jar:
 Resulting artifacts:
 
 - core library: `lib/build/libs/nexum.jar`
+- Jackson adapter: `jackson/build/libs/nexum-jackson.jar`
 - server: `server/build/libs/nexum-server.jar`
 
 Run the full test suite:
@@ -163,7 +170,7 @@ Key references:
 
 ## Object Mode
 
-Use the object facade when you want typed persistence. Start with the DSL and generated default codec for `Map<String, Object>` documents, use JavaBeans when you want getter/setter-based object mapping, and drop down to a handwritten codec only when you need custom encoding logic.
+Use the object facade when you want typed persistence. Start with the DSL and generated default codec for `Map<String, Object>` documents, use JavaBeans when you want getter/setter-based object mapping, use the optional Jackson adapter when your app is already DTO-first, and drop down to a handwritten codec only when you need custom encoding logic.
 
 ```java
 import biz.digitalindustry.storage.object.api.ObjectTypeDefinition;
@@ -251,7 +258,7 @@ try (var store = NativeObjectStore.fileBacked("./data/object.dbs")) {
 }
 ```
 
-This bean path infers the simple scalar fields from the bean itself, so you only need to specify the key and any explicit overrides such as indexes or references. Nexum does not try to auto-map arbitrary POJOs by default; if you need constructor-based or custom object mapping, use a handwritten codec.
+This bean path infers the simple scalar fields from the bean itself, so you only need to specify the key and any explicit overrides such as indexes or references. If you want broader POJO support and your app already uses Jackson, use the optional [`nexum-jackson`](jackson-adapter.md) adapter instead.
 
 If you have already registered an object definition and want to save a plain Java object without a separate codec, you can map against the stored definition directly:
 
@@ -295,6 +302,34 @@ try (var store = NativeObjectStore.fileBacked("./data/object.dbs")) {
 
 This mapped-object path supports JavaBeans and non-final public fields. Private-field POJOs are intentionally not auto-mapped.
 
+For broader POJO mapping, records, and Jackson-friendly DTOs, see [`jackson-adapter.md`](jackson-adapter.md).
+
+If your application already uses Jackson DTOs, the optional `jackson` module gives you a thinner adapter:
+
+```java
+import biz.digitalindustry.storage.jackson.JacksonAdapter;
+
+public record PersonDto(
+        String id,
+        String name,
+        long age,
+        boolean active
+) {
+}
+
+try (var jacksonAdapter = new JacksonAdapter("./data/object.dbs")) {
+    jacksonAdapter.register(PersonDto.class, "id");
+
+    PersonDto person = new PersonDto("person-1", "Ada", 37L, true);
+    jacksonAdapter.save(person);
+
+    PersonDto loaded = jacksonAdapter.get(PersonDto.class, "person-1").value();
+    System.out.println(loaded.name());
+}
+```
+
+That adapter lives outside the core library so Nexum itself does not take on a Jackson dependency.
+
 Key references:
 
 - [`ObjectStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectStore.java)
@@ -303,6 +338,7 @@ Key references:
 - [`ObjectTypes.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectTypes.java)
 - [`GeneratedObjectTypes.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/GeneratedObjectTypes.java)
 - [`NativeObjectStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/engine/NativeObjectStore.java)
+- [`JacksonAdapter.java`](https://github.com/xgeoff/nexum/blob/main/jackson/src/main/java/biz/digitalindustry/storage/jackson/JacksonAdapter.java)
 
 ## Use The Query Providers Directly
 

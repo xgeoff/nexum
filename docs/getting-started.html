@@ -77,6 +77,16 @@
 
 
 
+<li class="sidebar__file"><a href="/nexum/jackson-adapter.html">Jackson Adapter</a></li>
+
+
+        
+            
+
+
+
+
+
 <li class="sidebar__file"><a href="/nexum/object-facade.html">Object Facade</a></li>
 
 
@@ -156,12 +166,16 @@
 <p>Build the core library jar:</p>
 <pre><code class="language-bash">./gradlew :lib:jar
 </code></pre>
+<p>Build the optional Jackson adapter jar:</p>
+<pre><code class="language-bash">./gradlew :jackson:jar
+</code></pre>
 <p>Build the optional server jar:</p>
 <pre><code class="language-bash">./gradlew :server:jar
 </code></pre>
 <p>Resulting artifacts:</p>
 <ul>
 <li>core library: <code>lib/build/libs/nexum.jar</code></li>
+<li>Jackson adapter: <code>jackson/build/libs/nexum-jackson.jar</code></li>
 <li>server: <code>server/build/libs/nexum-server.jar</code></li>
 </ul>
 <p>Run the full test suite:</p>
@@ -254,7 +268,7 @@ try (var store = NativeRelationalStore.fileBacked("./data/relational.dbs")) {
 <li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/relational/engine/NativeRelationalStore.java"><code>NativeRelationalStore.java</code></a></li>
 </ul>
 <h2 id="object-mode">Object Mode</h2>
-<p>Use the object facade when you want typed persistence. Start with the DSL and generated default codec for <code>Map&lt;String, Object&gt;</code> documents, use JavaBeans when you want getter/setter-based object mapping, and drop down to a handwritten codec only when you need custom encoding logic.</p>
+<p>Use the object facade when you want typed persistence. Start with the DSL and generated default codec for <code>Map&lt;String, Object&gt;</code> documents, use JavaBeans when you want getter/setter-based object mapping, use the optional Jackson adapter when your app is already DTO-first, and drop down to a handwritten codec only when you need custom encoding logic.</p>
 <pre><code class="language-java">import biz.digitalindustry.storage.object.api.ObjectTypeDefinition;
 import biz.digitalindustry.storage.object.api.ObjectTypes;
 import biz.digitalindustry.storage.object.engine.NativeObjectStore;
@@ -335,7 +349,7 @@ try (var store = NativeObjectStore.fileBacked("./data/object.dbs")) {
     store.save(personType, person);
 }
 </code></pre>
-<p>This bean path infers the simple scalar fields from the bean itself, so you only need to specify the key and any explicit overrides such as indexes or references. Nexum does not try to auto-map arbitrary POJOs by default; if you need constructor-based or custom object mapping, use a handwritten codec.</p>
+<p>This bean path infers the simple scalar fields from the bean itself, so you only need to specify the key and any explicit overrides such as indexes or references. If you want broader POJO support and your app already uses Jackson, use the optional <a href="jackson-adapter.md"><code>nexum-jackson</code></a> adapter instead.</p>
 <p>If you have already registered an object definition and want to save a plain Java object without a separate codec, you can map against the stored definition directly:</p>
 <pre><code class="language-java">import biz.digitalindustry.storage.object.api.ObjectTypeDefinition;
 import biz.digitalindustry.storage.object.api.ObjectTypes;
@@ -374,6 +388,29 @@ try (var store = NativeObjectStore.fileBacked("./data/object.dbs")) {
 }
 </code></pre>
 <p>This mapped-object path supports JavaBeans and non-final public fields. Private-field POJOs are intentionally not auto-mapped.</p>
+<p>For broader POJO mapping, records, and Jackson-friendly DTOs, see <a href="jackson-adapter.md"><code>jackson-adapter.md</code></a>.</p>
+<p>If your application already uses Jackson DTOs, the optional <code>jackson</code> module gives you a thinner adapter:</p>
+<pre><code class="language-java">import biz.digitalindustry.storage.jackson.JacksonAdapter;
+
+public record PersonDto(
+        String id,
+        String name,
+        long age,
+        boolean active
+) {
+}
+
+try (var jacksonAdapter = new JacksonAdapter("./data/object.dbs")) {
+    jacksonAdapter.register(PersonDto.class, "id");
+
+    PersonDto person = new PersonDto("person-1", "Ada", 37L, true);
+    jacksonAdapter.save(person);
+
+    PersonDto loaded = jacksonAdapter.get(PersonDto.class, "person-1").value();
+    System.out.println(loaded.name());
+}
+</code></pre>
+<p>That adapter lives outside the core library so Nexum itself does not take on a Jackson dependency.</p>
 <p>Key references:</p>
 <ul>
 <li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectStore.java"><code>ObjectStore.java</code></a></li>
@@ -382,6 +419,7 @@ try (var store = NativeObjectStore.fileBacked("./data/object.dbs")) {
 <li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectTypes.java"><code>ObjectTypes.java</code></a></li>
 <li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/GeneratedObjectTypes.java"><code>GeneratedObjectTypes.java</code></a></li>
 <li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/engine/NativeObjectStore.java"><code>NativeObjectStore.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/jackson/src/main/java/biz/digitalindustry/storage/jackson/JacksonAdapter.java"><code>JacksonAdapter.java</code></a></li>
 </ul>
 <h2 id="use-the-query-providers-directly">Use The Query Providers Directly</h2>
 <p>If you want query strings without the HTTP server, embed the query providers over the graph or relational facades:</p>

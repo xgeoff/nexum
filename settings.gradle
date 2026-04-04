@@ -25,6 +25,7 @@ plugins {
 }
 
 rootProject.name = 'nexum'
-include(":lib", ":server")
+include(":lib", ":jackson", ":server")
 project(":lib").projectDir = file("lib")
+project(":jackson").projectDir = file("jackson")
 project(":server").projectDir = file("server")
