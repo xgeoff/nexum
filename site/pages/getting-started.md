@@ -21,6 +21,7 @@ This guide covers:
 4. running the provided Micronaut server
 5. embedding Nexum inside another server such as Spring Boot
 6. calling the sample HTTP API
+7. using the optional MCP transport
 
 ## Build The Artifacts
 
@@ -389,6 +390,42 @@ Useful properties:
 - `relational.db.page-size=8192`
 - `relational.db.max-wal-bytes=536870912`
 - `relational.db.checkpoint-on-close=true`
+
+## Use The MCP Transport
+
+If you want LLM-oriented tool access instead of direct REST calls, the optional MCP transport is exposed by the same `nexum-server` process at `POST /mcp`.
+
+Example initialize request:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "initialize",
+  "params": {
+    "protocolVersion": "2026-04-04"
+  }
+}
+```
+
+Example tool call:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "tools/call",
+  "params": {
+    "name": "nexum.query",
+    "arguments": {
+      "provider": "cypher",
+      "payload": "MATCH (n) RETURN n"
+    }
+  }
+}
+```
+
+The MCP transport lives entirely in `nexum-server` and does not change the core database library. See [`mcp-server.md`](mcp-server.md) for the current tool catalog and architecture.
 
 ## Embed Nexum In Spring Boot
 

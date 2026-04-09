@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>Concurrency Model</title>
-    <meta name="description" content="The current single-writer, multi-reader contract exposed by the native engine and facade APIs.">
+    <title>MCP Server</title>
+    <meta name="description" content="Optional MCP transport for Nexum server, exposing query, object, and maintenance operations as tools.">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -147,58 +147,87 @@
 
     <main class="page-frame">
         <section class="hero-panel hero-panel--reference">
-            <p class="eyebrow">Correctness Contract</p>
-            <h1>Concurrency Model</h1>
-            <p class="hero-copy">Nexum currently standardizes on a single-writer and multi-reader model so committed reads stay stable while writes advance through a private overlay.</p>
+            <p class="eyebrow">Integration</p>
+            <h1>MCP Server</h1>
+            <p class="hero-copy">Nexum MCP support lives entirely in nexum-server as a transport and orchestration layer over the existing services.</p>
             <div class="hero-chip-row">
-                <span class="hero-chip">Isolation Surface</span>
-                <span class="hero-chip hero-chip--muted">Committed snapshots only</span>
+                <span class="hero-chip">Server Boundary</span>
+                <span class="hero-chip hero-chip--muted">Protocol only</span>
             </div>
         </section>
         <section class="content-panel prose prose--docs">
-<h1 id="concurrency-model">Concurrency Model</h1>
-<p>Status: active implementation contract</p>
-<p>Nexum currently adopts a single-writer/multi-reader model.</p>
-<h2 id="guarantee">Guarantee</h2>
+<h1 id="mcp-server">MCP Server</h1>
+<p>Status: optional server transport</p>
+<p>The MCP surface is implemented entirely in <code>nexum-server</code>.</p>
+<p>It does not change or extend the core database engine in <code>lib</code>. The MCP layer is only:</p>
 <ul>
-<li>Any number of read operations may be in flight concurrently at the API layer.</li>
-<li>Write operations are exclusive.</li>
-<li>A single writer may be active while readers are also active.</li>
-<li>Readers observe last committed state only.</li>
-<li>The active writer observes its own private overlay plus the last committed state.</li>
-<li>Nexum does not expose dirty reads or partially applied transaction state.</li>
+<li>transport</li>
+<li>protocol adaptation</li>
+<li>tool registration</li>
+<li>tool dispatch to existing server services</li>
 </ul>
-<h2 id="scope">Scope</h2>
-<p>This guarantee applies to:</p>
+<h2 id="endpoint">Endpoint</h2>
 <ul>
-<li>the native object facade</li>
-<li>the native relational facade</li>
-<li>the native graph facade</li>
-<li>the Micronaut graph service wrapper</li>
+<li><code>POST /mcp</code></li>
 </ul>
-<p>The storage engine also exposes <code>TransactionMode.READ_ONLY</code> and enforces the same contract for direct engine callers.</p>
-<h2 id="current-implementation-notes">Current Implementation Notes</h2>
+<p>The current implementation supports MCP-style JSON-RPC calls for:</p>
 <ul>
-<li>The contract is about correctness and isolation, not peak parallel throughput.</li>
-<li>Readers use an atomically published committed snapshot while the writer works in private overlay state.</li>
-<li>Commit publishes new committed state only after record, schema, root, and index changes are ready.</li>
-<li>Only one write transaction may be active at a time.</li>
-<li>There is no MVCC yet.</li>
-<li>There is no deadlock detection because the current model does not permit multiple concurrent writers.</li>
+<li><code>initialize</code></li>
+<li><code>tools/list</code></li>
+<li><code>tools/call</code></li>
 </ul>
-<h2 id="non-goals-for-this-phase">Non-Goals For This Phase</h2>
+<h2 id="current-tools">Current Tools</h2>
 <ul>
-<li>multi-writer transactions</li>
-<li>snapshot isolation</li>
-<li>distributed coordination</li>
-<li>lock escalation</li>
-<li>cross-process writer coordination</li>
+<li><code>nexum.query</code></li>
+<li><code>nexum.object.register_type</code></li>
+<li><code>nexum.object.put</code></li>
+<li><code>nexum.object.get</code></li>
+<li><code>nexum.object.find</code></li>
+<li><code>nexum.object.delete</code></li>
+<li><code>nexum.maintenance.status</code></li>
+<li><code>nexum.maintenance.checkpoint</code></li>
 </ul>
-<h2 id="operational-guidance">Operational Guidance</h2>
+<h2 id="example">Example</h2>
+<p>Initialize:</p>
+<pre><code class="language-json">{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "initialize",
+  "params": {
+    "protocolVersion": "2026-04-04"
+  }
+}
+</code></pre>
+<p>Call a tool:</p>
+<pre><code class="language-json">{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "tools/call",
+  "params": {
+    "name": "nexum.query",
+    "arguments": {
+      "provider": "sql",
+      "payload": "SELECT * FROM users"
+    }
+  }
+}
+</code></pre>
+<h2 id="architecture">Architecture</h2>
+<p>The MCP layer sits alongside the existing REST API.</p>
+<p>Call chain:</p>
 <ul>
-<li>Use the embedded facades for normal access patterns.</li>
-<li>Treat the HTTP query layer as an experimental API surface over the graph facade, not as the primary concurrency boundary.</li>
-<li>If a workload needs high-throughput concurrent reads during sustained writes, benchmark it explicitly before assuming the current implementation is sufficient.</li>
+<li>MCP request</li>
+<li><code>McpController</code></li>
+<li><code>McpToolRegistry</code></li>
+<li>MCP tool handler</li>
+<li>existing Nexum server service</li>
+<li>core <code>lib</code></li>
+</ul>
+<p>That keeps the boundary clean:</p>
+<ul>
+<li><code>lib</code> remains unaware of MCP</li>
+<li><code>server</code> owns the protocol surface</li>
+<li>business logic remains in the existing service layer</li>
 </ul>
 
         </section>

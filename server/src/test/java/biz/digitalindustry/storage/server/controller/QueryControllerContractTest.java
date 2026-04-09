@@ -431,6 +431,113 @@ abstract class QueryControllerContractTest {
         assertFalse(after.checkpointRequested());
     }
 
+    @Test
+    void testMcpInitializeAndToolsList() {
+        Map<String, Object> initialize = client.toBlocking().retrieve(
+                HttpRequest.POST("/mcp", mcpRequest(1, "initialize", Map.of("protocolVersion", "2026-04-04"))),
+                Map.class
+        );
+
+        assertEquals("2.0", initialize.get("jsonrpc"));
+        assertNull(initialize.get("error"));
+        Map<String, Object> initializeResult = castMap(initialize.get("result"));
+        assertEquals("2026-04-04", initializeResult.get("protocolVersion"));
+        Map<String, Object> capabilities = castMap(initializeResult.get("capabilities"));
+        assertTrue(capabilities.containsKey("tools"));
+
+        Map<String, Object> toolsList = client.toBlocking().retrieve(
+                HttpRequest.POST("/mcp", mcpRequest(2, "tools/list", Map.of())),
+                Map.class
+        );
+        Map<String, Object> listResult = castMap(toolsList.get("result"));
+        java.util.List<Map<String, Object>> tools = castList(listResult.get("tools"));
+        assertTrue(tools.stream().anyMatch(tool -> "nexum.query".equals(tool.get("name"))));
+        assertTrue(tools.stream().anyMatch(tool -> "nexum.object.put".equals(tool.get("name"))));
+        assertTrue(tools.stream().anyMatch(tool -> "nexum.maintenance.status".equals(tool.get("name"))));
+    }
+
+    @Test
+    void testMcpQueryToolCall() {
+        Map<String, Object> response = client.toBlocking().retrieve(
+                HttpRequest.POST("/mcp", mcpRequest(3, "tools/call", Map.of(
+                        "name", "nexum.query",
+                        "arguments", Map.of(
+                                "provider", "cypher",
+                                "payload", "CREATE (n:Person {id:'alice'})"
+                        )
+                ))),
+                Map.class
+        );
+
+        Map<String, Object> result = castMap(response.get("result"));
+        java.util.List<Map<String, Object>> content = castList(result.get("content"));
+        Map<String, Object> json = castMap(content.get(0).get("json"));
+        assertEquals("cypher", json.get("provider"));
+        java.util.List<Map<String, Object>> rows = castList(json.get("results"));
+        assertEquals(1, rows.size());
+    }
+
+    @Test
+    void testMcpObjectAndMaintenanceTools() {
+        Map<String, Object> register = client.toBlocking().retrieve(
+                HttpRequest.POST("/mcp", mcpRequest(4, "tools/call", Map.of(
+                        "name", "nexum.object.register_type",
+                        "arguments", Map.of(
+                                "type", "person",
+                                "definition", personTypeRegistration().get("definition")
+                        )
+                ))),
+                Map.class
+        );
+        Map<String, Object> registerJson = firstMcpJson(register);
+        assertEquals(true, registerJson.get("registered"));
+
+        client.toBlocking().retrieve(
+                HttpRequest.POST("/mcp", mcpRequest(5, "tools/call", Map.of(
+                        "name", "nexum.object.put",
+                        "arguments", Map.of(
+                                "type", "person",
+                                "key", "person-1",
+                                "document", Map.of(
+                                        "id", "person-1",
+                                        "name", "Ada",
+                                        "age", 37,
+                                        "loginCount", 2,
+                                        "active", true
+                                )
+                        )
+                ))),
+                Map.class
+        );
+
+        Map<String, Object> get = client.toBlocking().retrieve(
+                HttpRequest.POST("/mcp", mcpRequest(6, "tools/call", Map.of(
+                        "name", "nexum.object.get",
+                        "arguments", Map.of(
+                                "type", "person",
+                                "key", "person-1"
+                        )
+                ))),
+                Map.class
+        );
+        Map<String, Object> getJson = firstMcpJson(get);
+        assertEquals("person-1", getJson.get("key"));
+        assertEquals("Ada", castMap(getJson.get("document")).get("name"));
+
+        client.toBlocking().exchange(HttpRequest.POST("/query",
+                QueryRequest.of("cypher", "CREATE (n:Person {id:'alice'})")), QueryResponse.class);
+
+        Map<String, Object> maintenance = client.toBlocking().retrieve(
+                HttpRequest.POST("/mcp", mcpRequest(7, "tools/call", Map.of(
+                        "name", "nexum.maintenance.status",
+                        "arguments", Map.of()
+                ))),
+                Map.class
+        );
+        Map<String, Object> maintenanceJson = firstMcpJson(maintenance);
+        assertTrue(((Number) maintenanceJson.get("walSizeBytes")).longValue() > 0L);
+    }
+
     private Map<String, Object> personTypeRegistration() {
         return Map.of(
                 "action", "registerType",
@@ -459,8 +566,28 @@ abstract class QueryControllerContractTest {
         return HttpRequest.POST("/query", Map.of("object", payload));
     }
 
+    private static Map<String, Object> mcpRequest(Object id, String method, Map<String, Object> params) {
+        return Map.of(
+                "jsonrpc", "2.0",
+                "id", id,
+                "method", method,
+                "params", params
+        );
+    }
+
+    private static Map<String, Object> firstMcpJson(Map<String, Object> response) {
+        Map<String, Object> result = castMap(response.get("result"));
+        java.util.List<Map<String, Object>> content = castList(result.get("content"));
+        return castMap(content.get(0).get("json"));
+    }
+
     @SuppressWarnings("unchecked")
     private static Map<String, Object> castMap(Object value) {
         return (Map<String, Object>) value;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static java.util.List<Map<String, Object>> castList(Object value) {
+        return (java.util.List<Map<String, Object>>) value;
     }
 }

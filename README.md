@@ -177,6 +177,7 @@ See [`server-query-guide.md`](site/pages/server-query-guide.md) for the exact su
 - [`jackson-adapter.md`](site/pages/jackson-adapter.md)
 - [`relational-facade.md`](site/pages/relational-facade.md)
 - [`server-query-guide.md`](site/pages/server-query-guide.md)
+- [`mcp-server.md`](site/pages/mcp-server.md)
 
 ## Current Limits
 

@@ -87,6 +87,16 @@
 
 
 
+<li class="sidebar__file"><a href="/nexum/mcp-server.html">Mcp Server</a></li>
+
+
+        
+            
+
+
+
+
+
 <li class="sidebar__file"><a href="/nexum/object-facade.html">Object Facade</a></li>
 
 
@@ -161,6 +171,7 @@
 <li>running the provided Micronaut server</li>
 <li>embedding Nexum inside another server such as Spring Boot</li>
 <li>calling the sample HTTP API</li>
+<li>using the optional MCP transport</li>
 </ol>
 <h2 id="build-the-artifacts">Build The Artifacts</h2>
 <p>Build the core library jar:</p>
@@ -455,6 +466,33 @@ var sql = new SqlQueryProvider(relational);
 <li><code>relational.db.max-wal-bytes=536870912</code></li>
 <li><code>relational.db.checkpoint-on-close=true</code></li>
 </ul>
+<h2 id="use-the-mcp-transport">Use The MCP Transport</h2>
+<p>If you want LLM-oriented tool access instead of direct REST calls, the optional MCP transport is exposed by the same <code>nexum-server</code> process at <code>POST /mcp</code>.</p>
+<p>Example initialize request:</p>
+<pre><code class="language-json">{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "initialize",
+  "params": {
+    "protocolVersion": "2026-04-04"
+  }
+}
+</code></pre>
+<p>Example tool call:</p>
+<pre><code class="language-json">{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "tools/call",
+  "params": {
+    "name": "nexum.query",
+    "arguments": {
+      "provider": "cypher",
+      "payload": "MATCH (n) RETURN n"
+    }
+  }
+}
+</code></pre>
+<p>The MCP transport lives entirely in <code>nexum-server</code> and does not change the core database library. See <a href="mcp-server.md"><code>mcp-server.md</code></a> for the current tool catalog and architecture.</p>
 <h2 id="embed-nexum-in-spring-boot">Embed Nexum In Spring Boot</h2>
 <p>If you already have a Spring Boot application, the usual pattern is:</p>
 <ol>
