@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <title>Relational Facade</title>
-    <meta name="description" content="Table-and-row storage over the shared native engine with exact and range lookup on declared indexes.">
+    <meta name="description" content="Table-and-row storage over the shared native engine with exact, range, and vector lookup on declared indexes.">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -141,6 +141,16 @@
 
 
         
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/nexum/vector-facade.html">Vector Facade</a></li>
+
+
+        
         </ul>
     </nav>
 </div>
@@ -149,7 +159,7 @@
         <section class="hero-panel hero-panel--reference">
             <p class="eyebrow">API Reference</p>
             <h1>Relational Facade</h1>
-            <p class="hero-copy">The relational facade is intentionally narrow and storage-focused, giving tables, rows, and index-backed lookups without pretending to be a full SQL engine.</p>
+            <p class="hero-copy">The relational facade is intentionally narrow and storage-focused, giving tables, rows, and index-backed lookups, including nearest-neighbor vector search, without pretending to be a full SQL engine.</p>
             <div class="hero-chip-row">
                 <span class="hero-chip">Relational Scope</span>
                 <span class="hero-chip hero-chip--muted">Table primitives over one engine</span>
@@ -159,13 +169,14 @@
 <h1 id="relational-facade">Relational Facade</h1>
 <p>Status: active native implementation</p>
 <p>This facade provides table-and-row storage on top of the native record engine.</p>
-<p>Source package: <a href="https://github.com/xgeoff/nexum/tree/main/lib/src/main/java/biz/digitalindustry/storage/relational">github.com/xgeoff/nexum/tree/main/lib/src/main/java/biz/digitalindustry/storage/relational</a></p>
+<p>Source package: <a href="https://github.com/xgeoff/nexum/tree/main/lib/src/main/java/biz/digitalindustry/db/relational">github.com/xgeoff/nexum/tree/main/lib/src/main/java/biz/digitalindustry/db/relational</a></p>
 <h2 id="key-types">Key Types</h2>
 <ul>
-<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/relational/api/RelationalStore.java"><code>RelationalStore.java</code></a></li>
-<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/relational/api/TableDefinition.java"><code>TableDefinition.java</code></a></li>
-<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/relational/api/Row.java"><code>Row.java</code></a></li>
-<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/relational/engine/NativeRelationalStore.java"><code>NativeRelationalStore.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/relational/api/RelationalStore.java"><code>RelationalStore.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/relational/api/TableDefinition.java"><code>TableDefinition.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/relational/api/Row.java"><code>Row.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/relational/runtime/NativeRelationalStore.java"><code>NativeRelationalStore.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/relational/api/VectorRowMatch.java"><code>VectorRowMatch.java</code></a></li>
 </ul>
 <h2 id="design">Design</h2>
 <p>The current relational layer is intentionally narrow. It is a storage facade, not a SQL engine.</p>
@@ -176,6 +187,7 @@
 <li>row storage as <code>Map&lt;String, FieldValue&gt;</code></li>
 <li>exact-match lookup</li>
 <li>ordered/range lookup for declared ordered indexes</li>
+<li>nearest-neighbor lookup for declared vector indexes</li>
 </ul>
 <p>Table definitions are now restored from the persisted engine schema on reopen, so a reopened relational store can recover registered tables without manual re-registration.</p>
 <p>Each stored row also carries a reserved internal key, <code>rowKey</code>, derived from the primary-key value.</p>
@@ -188,6 +200,7 @@
 <li>scan all rows</li>
 <li>exact-match lookup by column value</li>
 <li>ordered/range lookup by column value</li>
+<li>nearest-neighbor lookup by vector column</li>
 <li>delete by primary key</li>
 </ul>
 <h2 id="indexing">Indexing</h2>
@@ -195,12 +208,13 @@
 <ul>
 <li>exact-match single-field indexes</li>
 <li>ordered/range single-field indexes</li>
+<li>vector single-field indexes</li>
 <li>the reserved <code>rowKey</code> field</li>
 </ul>
 <p>Those indexes are persisted in the native <code>.indexes</code> sidecar and can be queried directly from persisted index pages during non-transactional reads.</p>
 <h2 id="example">Example</h2>
-<pre><code class="language-java">try (biz.digitalindustry.storage.relational.api.RelationalStore store =
-             new biz.digitalindustry.storage.relational.engine.NativeRelationalStore("data/relational.dbs")) {
+<pre><code class="language-java">try (biz.digitalindustry.db.relational.api.RelationalStore store =
+             new biz.digitalindustry.db.relational.runtime.NativeRelationalStore("data/relational.dbs")) {
     store.registerTable(users);
 
     store.upsert(users, new Row("u1", Map.of(
@@ -214,6 +228,28 @@
     List&lt;Row&gt; range = store.findRangeBy(users, "age", new LongValue(30), new LongValue(40));
 }
 </code></pre>
+<p>Vector example:</p>
+<pre><code class="language-java">TableDefinition embeddings = new TableDefinition(
+        "embeddings",
+        "id",
+        List.of(
+                new FieldDefinition("id", ValueType.STRING, true, false),
+                FieldDefinition.vector("embedding", 3, true)
+        ),
+        List.of(
+                IndexDefinition.vector("embeddings_embedding_idx", "embedding", 3, "euclidean")
+        )
+);
+
+store.registerTable(embeddings);
+
+var matches = store.findNearestBy(
+        embeddings,
+        "embedding",
+        Vector.of(1.0f, 0.0f, 0.0f),
+        10
+);
+</code></pre>
 <h2 id="current-limits">Current Limits</h2>
 <ul>
 <li>no SQL planner or optimizer</li>
@@ -221,6 +257,7 @@
 <li>no composite primary keys</li>
 <li>no foreign-key enforcement</li>
 <li>SQL support is a narrow provider layer, not full ANSI SQL</li>
+<li>vector search is currently exposed through the direct relational API, not through the default SQL subset</li>
 <li>some structural delete cases in the native index tree still use rebuild fallback</li>
 </ul>
 

@@ -26,10 +26,10 @@ This module is intentionally outside `lib`, so the core database stays free of J
 
 ## Key Types
 
-- [`JacksonAdapter.java`](https://github.com/xgeoff/nexum/blob/main/jackson/src/main/java/biz/digitalindustry/storage/jackson/JacksonAdapter.java)
-- [`JacksonObjectTypes.java`](https://github.com/xgeoff/nexum/blob/main/jackson/src/main/java/biz/digitalindustry/storage/jackson/JacksonObjectTypes.java)
-- [`ObjectTypeDefinition.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectTypeDefinition.java)
-- [`NativeObjectStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/engine/NativeObjectStore.java)
+- [`JacksonAdapter.java`](https://github.com/xgeoff/nexum/blob/main/jackson/src/main/java/biz/digitalindustry/db/jackson/JacksonAdapter.java)
+- [`JacksonObjectTypes.java`](https://github.com/xgeoff/nexum/blob/main/jackson/src/main/java/biz/digitalindustry/db/jackson/JacksonObjectTypes.java)
+- [`ObjectTypeDefinition.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/object/api/ObjectTypeDefinition.java)
+- [`NativeObjectStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/object/runtime/NativeObjectStore.java)
 
 ## Example
 

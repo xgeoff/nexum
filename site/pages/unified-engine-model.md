@@ -1,12 +1,12 @@
 ---
 title = "Unified Engine Model"
-description = "The shared storage concepts, runtime pieces, and design rules that unify object, relational, and graph behavior in Nexum."
+description = "The shared storage concepts, runtime pieces, and design rules that unify object, relational, graph, and vector behavior in Nexum."
 layout = "systems"
 eyebrow = "Core Model"
 lead = "Nexum is built as one embedded multi-model engine: record primitives, schema metadata, indexes, and recovery are shared, while facade behavior stays layered above."
 metricLabel = "Model Strategy"
 metricValue = "Shared primitives"
-metricCopy = "Object, relational, and graph behavior are implemented above the same storage-owned record, schema, and index foundation."
+metricCopy = "Object, relational, graph, and vector behavior are implemented above the same storage-owned record, schema, and index foundation."
 ---
 
 # Unified Engine Model
@@ -23,14 +23,19 @@ Repository: [github.com/xgeoff/nexum](https://github.com/xgeoff/nexum)
 
 Canonical storage concepts:
 
-- [`RecordId.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/model/RecordId.java)
-- [`Record.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/model/Record.java)
-- [`FieldValue.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/model/FieldValue.java)
-- [`ReferenceValue.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/model/ReferenceValue.java)
-- [`EntityType.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/schema/EntityType.java)
-- [`IndexDefinition.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/schema/IndexDefinition.java)
+- [`RecordId.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/model/RecordId.java)
+- [`Record.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/model/Record.java)
+- [`FieldValue.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/model/FieldValue.java)
+- [`ReferenceValue.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/model/ReferenceValue.java)
+- [`Vector.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/model/Vector.java)
+- [`VectorValue.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/model/VectorValue.java)
+- [`EntityType.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/schema/EntityType.java)
+- [`SchemaDefinition.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/schema/SchemaDefinition.java)
+- [`IndexDefinition.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/schema/IndexDefinition.java)
 
-The storage layer is record-oriented. Object, relational, and graph behavior are implemented as façades over the same primitives.
+The storage layer is record-oriented. Object, relational, graph, and vector behavior are implemented as façades over the same primitives.
+
+`EntityType` remains the record-level shape used by stored records, while `SchemaDefinition` is now the persisted, facade-neutral schema contract held in the engine registry. Each facade contributes a `SchemaKind` and reconstructs its own API-specific definition from that shared metadata.
 
 That shared engine does not imply automatic cross-facade reads. Graph records are not surfaced as relational rows or typed objects by default, and relational or object records are not surfaced as graph entities automatically. Nexum keeps those boundaries explicit because each facade introduces its own schema conventions, identity fields, and indexing behavior above the same physical storage engine.
 
@@ -40,11 +45,11 @@ If a product needs cross-facade access, it can implement a custom bridge or proj
 
 Core runtime:
 
-- [`NativeStorageEngine.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/engine/NativeStorageEngine.java)
-- [`PageBackedRecordStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/store/PageBackedRecordStore.java)
-- [`NativeIndexStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/engine/NativeIndexStore.java)
-- [`PageFile.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/page/PageFile.java)
-- [`WriteAheadLog.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/log/WriteAheadLog.java)
+- [`NativeStorageEngine.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/engine/NativeStorageEngine.java)
+- [`PageBackedRecordStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/engine/record/PageBackedRecordStore.java)
+- [`NativeIndexStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/engine/NativeIndexStore.java)
+- [`PageFile.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/engine/page/PageFile.java)
+- [`WriteAheadLog.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/engine/log/WriteAheadLog.java)
 
 Current engine properties:
 
@@ -53,6 +58,7 @@ Current engine properties:
 - checkpointed engine metadata
 - WAL-backed transaction recovery
 - exact-match and ordered/range indexes
+- vector nearest-neighbor indexes
 - persisted native index pages with recursive directory trees
 - direct native exact and range reads from persisted index structures
 
@@ -60,50 +66,64 @@ Current engine properties:
 
 Object facade:
 
-- [`ObjectStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectStore.java)
-- [`ObjectType.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectType.java)
-- [`ObjectCodec.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectCodec.java)
-- [`NativeObjectStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/engine/NativeObjectStore.java)
+- [`ObjectStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/object/api/ObjectStore.java)
+- [`ObjectType.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/object/api/ObjectType.java)
+- [`ObjectCodec.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/object/api/ObjectCodec.java)
+- [`NativeObjectStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/object/runtime/NativeObjectStore.java)
 
 Relational facade:
 
-- [`RelationalStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/relational/api/RelationalStore.java)
-- [`TableDefinition.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/relational/api/TableDefinition.java)
-- [`Row.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/relational/api/Row.java)
-- [`NativeRelationalStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/relational/engine/NativeRelationalStore.java)
+- [`RelationalStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/relational/api/RelationalStore.java)
+- [`TableDefinition.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/relational/api/TableDefinition.java)
+- [`Row.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/relational/api/Row.java)
+- [`NativeRelationalStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/relational/runtime/NativeRelationalStore.java)
 
 Graph facade:
 
-- [`GraphStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/graph/api/GraphStore.java)
-- [`GraphNodeRecord.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/graph/model/GraphNodeRecord.java)
-- [`GraphEdgeRecord.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/graph/model/GraphEdgeRecord.java)
-- [`NativeGraphStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/graph/engine/NativeGraphStore.java)
+- [`GraphStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/graph/api/GraphStore.java)
+- [`GraphNodeRecord.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/graph/model/GraphNodeRecord.java)
+- [`GraphEdgeRecord.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/graph/model/GraphEdgeRecord.java)
+- [`NativeGraphStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/graph/runtime/NativeGraphStore.java)
+
+Vector support:
+
+- [`VectorCollectionDefinition.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/vector/api/VectorCollectionDefinition.java)
+- [`NativeVectorStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/vector/runtime/NativeVectorStore.java)
+- [`VectorIndex.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/index/VectorIndex.java)
+- [`VectorMatch.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/index/VectorMatch.java)
+- [`FlatVectorIndex.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/vector/FlatVectorIndex.java)
+- [`VectorIndexDefinition.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/vector/VectorIndexDefinition.java)
+- [`Distances.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/vector/Distances.java)
 
 ## Query Module
 
 Query providers live in the product layer, not the server layer.
 
-- [`QueryProvider.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/query/QueryProvider.java)
-- [`QueryProviderRegistry.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/query/QueryProviderRegistry.java)
-- [`CypherQueryProvider.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/query/cypher/CypherQueryProvider.java)
-- [`SqlQueryProvider.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/query/sql/SqlQueryProvider.java)
+- [`QueryProvider.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/query/QueryProvider.java)
+- [`QueryProviderRegistry.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/query/QueryProviderRegistry.java)
+- [`CypherQueryProvider.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/query/cypher/CypherQueryProvider.java)
+- [`SqlQueryProvider.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/query/sql/SqlQueryProvider.java)
+- [`VectorQueryProvider.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/query/vector/VectorQueryProvider.java)
 
 Dependency direction:
 
 - Cypher provider -> graph facade
 - SQL provider -> relational facade
+- Vector provider -> vector/relational nearest-neighbor search
 - server -> query providers
 
 ## Shared Indexing
 
 Shared index layers:
 
-- [`ExactMatchIndexManager.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/engine/ExactMatchIndexManager.java)
-- [`OrderedRangeIndexManager.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/engine/OrderedRangeIndexManager.java)
-- [`ExactMatchIndex.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/index/ExactMatchIndex.java)
-- [`OrderedRangeIndex.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/index/OrderedRangeIndex.java)
+- [`ExactMatchIndexManager.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/engine/ExactMatchIndexManager.java)
+- [`OrderedRangeIndexManager.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/engine/OrderedRangeIndexManager.java)
+- [`VectorIndexManager.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/engine/VectorIndexManager.java)
+- [`ExactMatchIndex.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/index/ExactMatchIndex.java)
+- [`OrderedRangeIndex.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/index/OrderedRangeIndex.java)
+- [`VectorIndex.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/index/VectorIndex.java)
 
-All three façades share the same storage-owned exact and ordered lookup path.
+All three façades share the same storage-owned exact and ordered lookup path, and vector search now plugs into that same engine-owned indexing layer rather than living in a separate subsystem.
 
 ## Concurrency
 

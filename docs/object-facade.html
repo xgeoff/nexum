@@ -141,6 +141,16 @@
 
 
         
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/nexum/vector-facade.html">Vector Facade</a></li>
+
+
+        
         </ul>
     </nav>
 </div>
@@ -159,18 +169,18 @@
 <h1 id="object-facade">Object Facade</h1>
 <p>Status: active native implementation</p>
 <p>This facade provides object-style persistence on top of the native record engine.</p>
-<p>Source package: <a href="https://github.com/xgeoff/nexum/tree/main/lib/src/main/java/biz/digitalindustry/storage/object">github.com/xgeoff/nexum/tree/main/lib/src/main/java/biz/digitalindustry/storage/object</a></p>
+<p>Source package: <a href="https://github.com/xgeoff/nexum/tree/main/lib/src/main/java/biz/digitalindustry/db/object">github.com/xgeoff/nexum/tree/main/lib/src/main/java/biz/digitalindustry/db/object</a></p>
 <h2 id="key-types">Key Types</h2>
 <ul>
-<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectStore.java"><code>ObjectStore.java</code></a></li>
-<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectType.java"><code>ObjectType.java</code></a></li>
-<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectCodec.java"><code>ObjectCodec.java</code></a></li>
-<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectTypeDefinition.java"><code>ObjectTypeDefinition.java</code></a></li>
-<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectTypes.java"><code>ObjectTypes.java</code></a></li>
-<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/GeneratedObjectTypes.java"><code>GeneratedObjectTypes.java</code></a></li>
-<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectStoreContext.java"><code>ObjectStoreContext.java</code></a></li>
-<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/StoredObject.java"><code>StoredObject.java</code></a></li>
-<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/engine/NativeObjectStore.java"><code>NativeObjectStore.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/object/api/ObjectStore.java"><code>ObjectStore.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/object/api/ObjectType.java"><code>ObjectType.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/object/api/ObjectCodec.java"><code>ObjectCodec.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/object/api/ObjectTypeDefinition.java"><code>ObjectTypeDefinition.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/object/api/ObjectTypes.java"><code>ObjectTypes.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/object/api/GeneratedObjectTypes.java"><code>GeneratedObjectTypes.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/object/api/ObjectStoreContext.java"><code>ObjectStoreContext.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/object/api/StoredObject.java"><code>StoredObject.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/object/runtime/NativeObjectStore.java"><code>NativeObjectStore.java</code></a></li>
 </ul>
 <h2 id="design">Design</h2>
 <p>The facade is explicit:</p>
@@ -199,7 +209,7 @@
 <li>typed reference resolution through <code>ReferenceValue</code></li>
 </ul>
 <p>The reserved <code>objectKey</code> field acts as the stable logical identity inside each type namespace.</p>
-<p>If your application already uses Jackson DTOs, see the dedicated <a href="jackson-adapter.md"><code>jackson-adapter.md</code></a> page for the thinner <code>register/save/get</code> integration layer.</p>
+<p>If your application already uses Jackson DTOs, see the dedicated <a href="jackson-adapter.html"><code>Jackson Adapter</code></a> page for the thinner <code>register/save/get</code> integration layer.</p>
 <h2 id="example">Example</h2>
 <p>Start with the DSL and generated default codec unless you need Java object mapping or custom encoding.</p>
 <pre><code class="language-java">ObjectTypeDefinition personDefinition = ObjectTypes.define("Person")
@@ -295,7 +305,7 @@ try (var store = NativeObjectStore.fileBacked("./data/object-store.dbs")) {
 <li>you want a flat object model with standard getters and setters</li>
 </ul>
 <p>By default, <code>ObjectTypes.define(PersonBean.class)</code> infers <code>String</code>, integral numeric, floating-point numeric, and boolean bean properties. If you need references or tighter control, you can still override fields with the DSL before <code>build()</code>.</p>
-<p>If you want broader POJO mapping than the native bean and public-field support, use the optional <a href="jackson-adapter.md"><code>nexum-jackson</code></a> adapter. It pulls in Jackson deliberately and gives you a smoother DTO and record workflow when your application already uses Jackson for object mapping.</p>
+<p>If you want broader POJO mapping than the native bean and public-field support, use the optional <a href="jackson-adapter.html"><code>nexum-jackson</code></a> adapter. It pulls in Jackson deliberately and gives you a smoother DTO and record workflow when your application already uses Jackson for object mapping.</p>
 <h2 id="registered-definition-mapping">Registered Definition Mapping</h2>
 <p>Once a generated object type has been registered, the store can use that persisted definition to map runtime objects without requiring a separate codec registration.</p>
 <p>That means you can:</p>
@@ -344,7 +354,7 @@ try (var store = NativeObjectStore.fileBacked("./data/object-store.dbs")) {
 <li>reference fields map to <code>Map&lt;String, Object&gt;</code> values shaped like <code>{ "type": "...", "key": "..." }</code></li>
 </ul>
 <p>This path is schema-driven. Nexum does not scan arbitrary private fields or infer hidden structure from the class.</p>
-<p>If you need broader POJO support than this schema-driven native path, see the optional <a href="jackson-adapter.md"><code>nexum-jackson</code></a> module.</p>
+<p>If you need broader POJO support than this schema-driven native path, see the optional <a href="jackson-adapter.html"><code>nexum-jackson</code></a> module.</p>
 <p>Reference fields use the same builder style:</p>
 <pre><code class="language-java">ObjectTypeDefinition personDefinition = ObjectTypes.define("Person")
         .key("id")

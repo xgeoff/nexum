@@ -1,6 +1,6 @@
 # Nexum
 
-Nexum is a native embedded multi-model database implemented under `biz.digitalindustry.storage.*`.
+Nexum is a native embedded multi-model database implemented under `biz.digitalindustry.db.*`.
 
 The repository now has three active modules:
 
@@ -14,30 +14,32 @@ The canonical architecture page is [`architecture.md`](site/pages/architecture.m
 
 Core storage:
 
-- [`NativeStorageEngine.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/engine/NativeStorageEngine.java)
-- [`PageBackedRecordStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/store/PageBackedRecordStore.java)
-- [`NativeIndexStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/engine/NativeIndexStore.java)
-- [`PageFile.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/page/PageFile.java)
-- [`WriteAheadLog.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/log/WriteAheadLog.java)
+- [`NativeStorageEngine.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/engine/NativeStorageEngine.java)
+- [`PageBackedRecordStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/engine/record/PageBackedRecordStore.java)
+- [`NativeIndexStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/engine/NativeIndexStore.java)
+- [`PageFile.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/engine/page/PageFile.java)
+- [`WriteAheadLog.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/engine/log/WriteAheadLog.java)
 
 Facades:
 
-- graph: [`NativeGraphStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/graph/engine/NativeGraphStore.java)
-- object: [`NativeObjectStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/engine/NativeObjectStore.java)
-- relational: [`NativeRelationalStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/relational/engine/NativeRelationalStore.java)
+- graph: [`NativeGraphStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/graph/runtime/NativeGraphStore.java)
+- object: [`NativeObjectStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/object/runtime/NativeObjectStore.java)
+- relational: [`NativeRelationalStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/relational/runtime/NativeRelationalStore.java)
+- vector: [`NativeVectorStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/vector/runtime/NativeVectorStore.java)
 
 Query providers:
 
-- Cypher: [`CypherQueryProvider.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/query/cypher/CypherQueryProvider.java)
-- SQL: [`SqlQueryProvider.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/query/sql/SqlQueryProvider.java)
-- shared registry: [`QueryProviderRegistry.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/query/QueryProviderRegistry.java)
+- Cypher: [`CypherQueryProvider.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/query/cypher/CypherQueryProvider.java)
+- SQL: [`SqlQueryProvider.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/query/sql/SqlQueryProvider.java)
+- vector: [`VectorQueryProvider.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/query/vector/VectorQueryProvider.java)
+- shared registry: [`QueryProviderRegistry.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/query/QueryProviderRegistry.java)
 
 Server entry points:
 
-- [`Application.java`](https://github.com/xgeoff/nexum/blob/main/server/src/main/biz/digitalindustry/storage/server/Application.java)
-- [`QueryController.java`](https://github.com/xgeoff/nexum/blob/main/server/src/main/biz/digitalindustry/storage/server/controller/QueryController.java)
-- [`GraphStore.java`](https://github.com/xgeoff/nexum/blob/main/server/src/main/biz/digitalindustry/storage/server/service/GraphStore.java)
-- [`RelationalStoreService.java`](https://github.com/xgeoff/nexum/blob/main/server/src/main/biz/digitalindustry/storage/server/service/RelationalStoreService.java)
+- [`Application.java`](https://github.com/xgeoff/nexum/blob/main/server/src/main/biz/digitalindustry/db/server/Application.java)
+- [`QueryController.java`](https://github.com/xgeoff/nexum/blob/main/server/src/main/biz/digitalindustry/db/server/controller/QueryController.java)
+- [`GraphStore.java`](https://github.com/xgeoff/nexum/blob/main/server/src/main/biz/digitalindustry/db/server/service/GraphStore.java)
+- [`RelationalStoreService.java`](https://github.com/xgeoff/nexum/blob/main/server/src/main/biz/digitalindustry/db/server/service/RelationalStoreService.java)
 
 ## What Works
 
@@ -45,15 +47,16 @@ The native engine currently supports:
 
 - durable page-backed record storage
 - transactions with WAL-backed recovery
-- exact-match and ordered/range indexes
+- exact-match, ordered/range, and vector indexes
 - native persisted index pages with recursive directory lookup
 - graph CRUD and traversal
 - object CRUD with explicit codecs and references
 - relational CRUD with exact and range lookup
+- dedicated vector collection facade with nearest-neighbor lookup
 - a documented single-writer/multi-reader access model
 
 The HTTP API currently supports a tested narrow query subset through `POST /query`.
-Cypher is graph-backed and SQL is relational-backed.
+Cypher is graph-backed, SQL is relational-backed, and vector queries are vector-facade-backed nearest-neighbor lookups.
 It is still an experimental query surface, not yet a general database language layer.
 
 ## Running
@@ -102,34 +105,42 @@ Server storage properties:
 - `relational.db.page-size=8192`
 - `relational.db.max-wal-bytes=536870912`
 - `relational.db.checkpoint-on-close=true`
+- `vector.db.mode=file|memory`
+- `vector.db.path=./data/nexum-vector.dbs`
+- `vector.db.page-size=8192`
+- `vector.db.max-wal-bytes=536870912`
+- `vector.db.checkpoint-on-close=true`
 
 The benchmark harness now uses explicit files under `build/benchmarks/` and cleans them up after each run.
 
 Embedded factory examples:
 
 ```java
-var graph = biz.digitalindustry.storage.graph.engine.NativeGraphStore.fileBacked("./data/app-graph.dbs");
-var graphMemory = biz.digitalindustry.storage.graph.engine.NativeGraphStore.memoryOnly();
+var graph = biz.digitalindustry.db.graph.runtime.NativeGraphStore.fileBacked("./data/app-graph.dbs");
+var graphMemory = biz.digitalindustry.db.graph.runtime.NativeGraphStore.memoryOnly();
 
-var relational = biz.digitalindustry.storage.relational.engine.NativeRelationalStore.fileBacked("./data/app-relational.dbs");
-var relationalMemory = biz.digitalindustry.storage.relational.engine.NativeRelationalStore.memoryOnly();
+var relational = biz.digitalindustry.db.relational.runtime.NativeRelationalStore.fileBacked("./data/app-relational.dbs");
+var relationalMemory = biz.digitalindustry.db.relational.runtime.NativeRelationalStore.memoryOnly();
 
-var objectStore = biz.digitalindustry.storage.object.engine.NativeObjectStore.fileBacked("./data/app-object.dbs");
-var objectMemory = biz.digitalindustry.storage.object.engine.NativeObjectStore.memoryOnly();
+var objectStore = biz.digitalindustry.db.object.runtime.NativeObjectStore.fileBacked("./data/app-object.dbs");
+var objectMemory = biz.digitalindustry.db.object.runtime.NativeObjectStore.memoryOnly();
+
+var vectorStore = biz.digitalindustry.db.vector.runtime.NativeVectorStore.fileBacked("./data/app-vector.dbs");
+var vectorMemory = biz.digitalindustry.db.vector.runtime.NativeVectorStore.memoryOnly();
 ```
 
 Optional Jackson adapter example:
 
 ```java
-var jackson = new biz.digitalindustry.storage.jackson.JacksonAdapter("./data/app-object.dbs");
+var jackson = new biz.digitalindustry.db.jackson.JacksonAdapter("./data/app-object.dbs");
 jackson.register(PersonDto.class, "id");
 ```
 
 Embedded query-provider examples:
 
 ```java
-var cypher = new biz.digitalindustry.storage.query.cypher.CypherQueryProvider(graph);
-var sql = new biz.digitalindustry.storage.query.sql.SqlQueryProvider(relational);
+var cypher = new biz.digitalindustry.db.query.cypher.CypherQueryProvider(graph);
+var sql = new biz.digitalindustry.db.query.sql.SqlQueryProvider(relational);
 ```
 
 ## Query API
@@ -144,6 +155,34 @@ or:
 
 ```json
 { "sql": "SELECT * FROM users" }
+```
+
+or:
+
+```json
+{
+  "vector": {
+    "from": "embeddings",
+    "vector": {
+      "field": "embedding",
+      "nearest": {
+        "vector": [1.0, 0.0, 0.0],
+        "k": 3,
+        "distance": "euclidean"
+      }
+    }
+  }
+}
+```
+
+or:
+
+```text
+VECTOR FROM embeddings
+FIELD embedding
+NEAREST [1.0, 0.0, 0.0]
+K 3
+DISTANCE euclidean
 ```
 
 Supported Cypher-like operations include:
@@ -176,6 +215,7 @@ See [`server-query-guide.md`](site/pages/server-query-guide.md) for the exact su
 - [`object-facade.md`](site/pages/object-facade.md)
 - [`jackson-adapter.md`](site/pages/jackson-adapter.md)
 - [`relational-facade.md`](site/pages/relational-facade.md)
+- [`vector-facade.md`](site/pages/vector-facade.md)
 - [`server-query-guide.md`](site/pages/server-query-guide.md)
 - [`mcp-server.md`](site/pages/mcp-server.md)
 

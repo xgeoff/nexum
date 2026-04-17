@@ -141,6 +141,16 @@
 
 
         
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/nexum/vector-facade.html">Vector Facade</a></li>
+
+
+        
         </ul>
     </nav>
 </div>
@@ -168,6 +178,7 @@
 <li>building the Nexum artifacts</li>
 <li>using the core library directly</li>
 <li>using all three data-access modes: graph, relational, and object</li>
+<li>using vector search through the shared relational facade</li>
 <li>running the provided Micronaut server</li>
 <li>embedding Nexum inside another server such as Spring Boot</li>
 <li>calling the sample HTTP API</li>
@@ -227,8 +238,8 @@
 <p>If you need that behavior, you can write a custom bridge or projection layer on top of Nexum's shared record and schema primitives. Nexum does not provide that mapping automatically because the correct translation rules are application-specific.</p>
 <h2 id="graph-mode">Graph Mode</h2>
 <p>Use the graph facade when you want nodes, edges, and traversal directly from the embedded library.</p>
-<pre><code class="language-java">import biz.digitalindustry.storage.graph.api.GraphStore;
-import biz.digitalindustry.storage.graph.engine.NativeGraphStore;
+<pre><code class="language-java">import biz.digitalindustry.db.graph.api.GraphStore;
+import biz.digitalindustry.db.graph.runtime.NativeGraphStore;
 
 try (GraphStore graph = NativeGraphStore.fileBacked("./data/graph.dbs")) {
     graph.upsertNode("alice", "Person");
@@ -246,16 +257,16 @@ try (GraphStore graph = NativeGraphStore.fileBacked("./data/graph.dbs")) {
 </code></pre>
 <p>Key references:</p>
 <ul>
-<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/graph/api/GraphStore.java"><code>GraphStore.java</code></a></li>
-<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/graph/engine/NativeGraphStore.java"><code>NativeGraphStore.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/graph/api/GraphStore.java"><code>GraphStore.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/graph/runtime/NativeGraphStore.java"><code>NativeGraphStore.java</code></a></li>
 </ul>
 <h2 id="relational-mode">Relational Mode</h2>
-<p>Use the relational facade when you want explicit tables, rows, and exact or range lookup.</p>
-<pre><code class="language-java">import biz.digitalindustry.storage.model.LongValue;
-import biz.digitalindustry.storage.model.StringValue;
-import biz.digitalindustry.storage.relational.api.Row;
-import biz.digitalindustry.storage.relational.api.TableDefinition;
-import biz.digitalindustry.storage.relational.engine.NativeRelationalStore;
+<p>Use the relational facade when you want explicit tables, rows, and exact, range, or vector lookup.</p>
+<pre><code class="language-java">import biz.digitalindustry.db.model.LongValue;
+import biz.digitalindustry.db.model.StringValue;
+import biz.digitalindustry.db.relational.api.Row;
+import biz.digitalindustry.db.relational.api.TableDefinition;
+import biz.digitalindustry.db.relational.runtime.NativeRelationalStore;
 
 import java.util.Map;
 
@@ -269,20 +280,75 @@ try (var store = NativeRelationalStore.fileBacked("./data/relational.dbs")) {
     )));
 
     Row row = store.get(usersTable, "u1");
-    System.out.println(row.fields().get("name"));
+    System.out.println(row.values().get("name"));
 }
 </code></pre>
 <p>Key references:</p>
 <ul>
-<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/relational/api/RelationalStore.java"><code>RelationalStore.java</code></a></li>
-<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/relational/api/TableDefinition.java"><code>TableDefinition.java</code></a></li>
-<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/relational/engine/NativeRelationalStore.java"><code>NativeRelationalStore.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/relational/api/RelationalStore.java"><code>RelationalStore.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/relational/api/TableDefinition.java"><code>TableDefinition.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/relational/runtime/NativeRelationalStore.java"><code>NativeRelationalStore.java</code></a></li>
+</ul>
+<h2 id="vector-search">Vector Search</h2>
+<p>Use vector search when you want nearest-neighbor lookup over embeddings while still keeping that data inside the same core engine and schema model as the rest of Nexum.</p>
+<pre><code class="language-java">import biz.digitalindustry.db.model.StringValue;
+import biz.digitalindustry.db.model.Vector;
+import biz.digitalindustry.db.model.VectorValue;
+import biz.digitalindustry.db.schema.FieldDefinition;
+import biz.digitalindustry.db.schema.ValueType;
+import biz.digitalindustry.db.vector.api.VectorCollectionDefinition;
+import biz.digitalindustry.db.vector.api.VectorDocument;
+import biz.digitalindustry.db.vector.runtime.NativeVectorStore;
+
+import java.util.List;
+import java.util.Map;
+
+VectorCollectionDefinition embeddings = new VectorCollectionDefinition(
+        "embeddings",
+        "id",
+        "embedding",
+        3,
+        "euclidean",
+        List.of(
+                new FieldDefinition("id", ValueType.STRING, true, false),
+                FieldDefinition.vector("embedding", 3, true),
+                new FieldDefinition("label", ValueType.STRING, true, false)
+        ),
+        List.of()
+);
+
+try (var store = NativeVectorStore.fileBacked("./data/vector.dbs")) {
+    store.registerCollection(embeddings);
+
+    store.upsert(embeddings, new VectorDocument("e1", Map.of(
+            "id", new StringValue("e1"),
+            "label", new StringValue("alpha"),
+            "embedding", new VectorValue(Vector.of(1.0f, 0.0f, 0.0f))
+    )));
+
+    var matches = store.nearest(
+            embeddings,
+            Vector.of(1.0f, 0.0f, 0.0f),
+            5
+    );
+
+    System.out.println(matches.get(0).document().key());
+}
+</code></pre>
+<p>Key references:</p>
+<ul>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/model/Vector.java"><code>Vector.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/model/VectorValue.java"><code>VectorValue.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/vector/api/VectorCollectionDefinition.java"><code>VectorCollectionDefinition.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/vector/runtime/NativeVectorStore.java"><code>NativeVectorStore.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/query/vector/VectorQueryProvider.java"><code>VectorQueryProvider.java</code></a></li>
+<li><a href="vector-facade.html"><code>Vector Facade</code></a></li>
 </ul>
 <h2 id="object-mode">Object Mode</h2>
 <p>Use the object facade when you want typed persistence. Start with the DSL and generated default codec for <code>Map&lt;String, Object&gt;</code> documents, use JavaBeans when you want getter/setter-based object mapping, use the optional Jackson adapter when your app is already DTO-first, and drop down to a handwritten codec only when you need custom encoding logic.</p>
-<pre><code class="language-java">import biz.digitalindustry.storage.object.api.ObjectTypeDefinition;
-import biz.digitalindustry.storage.object.api.ObjectTypes;
-import biz.digitalindustry.storage.object.engine.NativeObjectStore;
+<pre><code class="language-java">import biz.digitalindustry.db.object.api.ObjectTypeDefinition;
+import biz.digitalindustry.db.object.api.ObjectTypes;
+import biz.digitalindustry.db.object.runtime.NativeObjectStore;
 
 import java.util.Map;
 
@@ -308,9 +374,9 @@ try (var store = NativeObjectStore.fileBacked("./data/object.dbs")) {
 </code></pre>
 <p>If you need explicit control over how a domain object is encoded and decoded, Nexum also supports a handwritten <code>ObjectCodec&lt;T&gt;</code>. That path is covered in the object facade reference.</p>
 <p>If you prefer Java objects over <code>Map&lt;String, Object&gt;</code>, but still want to avoid a handwritten codec, Nexum also supports a JavaBean path:</p>
-<pre><code class="language-java">import biz.digitalindustry.storage.object.api.ObjectTypeDefinition;
-import biz.digitalindustry.storage.object.api.ObjectTypes;
-import biz.digitalindustry.storage.object.engine.NativeObjectStore;
+<pre><code class="language-java">import biz.digitalindustry.db.object.api.ObjectTypeDefinition;
+import biz.digitalindustry.db.object.api.ObjectTypes;
+import biz.digitalindustry.db.object.runtime.NativeObjectStore;
 
 public class PersonBean {
     private String id;
@@ -360,11 +426,11 @@ try (var store = NativeObjectStore.fileBacked("./data/object.dbs")) {
     store.save(personType, person);
 }
 </code></pre>
-<p>This bean path infers the simple scalar fields from the bean itself, so you only need to specify the key and any explicit overrides such as indexes or references. If you want broader POJO support and your app already uses Jackson, use the optional <a href="jackson-adapter.md"><code>nexum-jackson</code></a> adapter instead.</p>
+<p>This bean path infers the simple scalar fields from the bean itself, so you only need to specify the key and any explicit overrides such as indexes or references. If you want broader POJO support and your app already uses Jackson, use the optional <a href="jackson-adapter.html"><code>nexum-jackson</code></a> adapter instead.</p>
 <p>If you have already registered an object definition and want to save a plain Java object without a separate codec, you can map against the stored definition directly:</p>
-<pre><code class="language-java">import biz.digitalindustry.storage.object.api.ObjectTypeDefinition;
-import biz.digitalindustry.storage.object.api.ObjectTypes;
-import biz.digitalindustry.storage.object.engine.NativeObjectStore;
+<pre><code class="language-java">import biz.digitalindustry.db.object.api.ObjectTypeDefinition;
+import biz.digitalindustry.db.object.api.ObjectTypes;
+import biz.digitalindustry.db.object.runtime.NativeObjectStore;
 
 public class PersonPojo {
     public String id;
@@ -399,9 +465,9 @@ try (var store = NativeObjectStore.fileBacked("./data/object.dbs")) {
 }
 </code></pre>
 <p>This mapped-object path supports JavaBeans and non-final public fields. Private-field POJOs are intentionally not auto-mapped.</p>
-<p>For broader POJO mapping, records, and Jackson-friendly DTOs, see <a href="jackson-adapter.md"><code>jackson-adapter.md</code></a>.</p>
+<p>For broader POJO mapping, records, and Jackson-friendly DTOs, see <a href="jackson-adapter.html"><code>Jackson Adapter</code></a>.</p>
 <p>If your application already uses Jackson DTOs, the optional <code>jackson</code> module gives you a thinner adapter:</p>
-<pre><code class="language-java">import biz.digitalindustry.storage.jackson.JacksonAdapter;
+<pre><code class="language-java">import biz.digitalindustry.db.jackson.JacksonAdapter;
 
 public record PersonDto(
         String id,
@@ -424,26 +490,57 @@ try (var jacksonAdapter = new JacksonAdapter("./data/object.dbs")) {
 <p>That adapter lives outside the core library so Nexum itself does not take on a Jackson dependency.</p>
 <p>Key references:</p>
 <ul>
-<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectStore.java"><code>ObjectStore.java</code></a></li>
-<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectCodec.java"><code>ObjectCodec.java</code></a></li>
-<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectTypeDefinition.java"><code>ObjectTypeDefinition.java</code></a></li>
-<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectTypes.java"><code>ObjectTypes.java</code></a></li>
-<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/GeneratedObjectTypes.java"><code>GeneratedObjectTypes.java</code></a></li>
-<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/engine/NativeObjectStore.java"><code>NativeObjectStore.java</code></a></li>
-<li><a href="https://github.com/xgeoff/nexum/blob/main/jackson/src/main/java/biz/digitalindustry/storage/jackson/JacksonAdapter.java"><code>JacksonAdapter.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/object/api/ObjectStore.java"><code>ObjectStore.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/object/api/ObjectCodec.java"><code>ObjectCodec.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/object/api/ObjectTypeDefinition.java"><code>ObjectTypeDefinition.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/object/api/ObjectTypes.java"><code>ObjectTypes.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/object/api/GeneratedObjectTypes.java"><code>GeneratedObjectTypes.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/object/runtime/NativeObjectStore.java"><code>NativeObjectStore.java</code></a></li>
+<li><a href="https://github.com/xgeoff/nexum/blob/main/jackson/src/main/java/biz/digitalindustry/db/jackson/JacksonAdapter.java"><code>JacksonAdapter.java</code></a></li>
 </ul>
 <h2 id="use-the-query-providers-directly">Use The Query Providers Directly</h2>
 <p>If you want query strings without the HTTP server, embed the query providers over the graph or relational facades:</p>
-<pre><code class="language-java">import biz.digitalindustry.storage.graph.engine.NativeGraphStore;
-import biz.digitalindustry.storage.query.cypher.CypherQueryProvider;
-import biz.digitalindustry.storage.query.sql.SqlQueryProvider;
-import biz.digitalindustry.storage.relational.engine.NativeRelationalStore;
+<pre><code class="language-java">import biz.digitalindustry.db.graph.runtime.NativeGraphStore;
+import biz.digitalindustry.db.query.cypher.CypherQueryProvider;
+import biz.digitalindustry.db.query.sql.SqlQueryProvider;
+import biz.digitalindustry.db.relational.runtime.NativeRelationalStore;
 
 var graph = NativeGraphStore.fileBacked("./data/query-graph.dbs");
 var relational = NativeRelationalStore.fileBacked("./data/query-relational.dbs");
 
 var cypher = new CypherQueryProvider(graph);
 var sql = new SqlQueryProvider(relational);
+</code></pre>
+<p>Vector provider example:</p>
+<pre><code class="language-java">import biz.digitalindustry.db.query.QueryCommand;
+import biz.digitalindustry.db.query.vector.VectorQueryProvider;
+import biz.digitalindustry.db.vector.runtime.NativeVectorStore;
+
+var vectorStore = NativeVectorStore.fileBacked("./data/query-vector.dbs");
+var vector = new VectorQueryProvider(vectorStore);
+
+var result = vector.execute(new QueryCommand("vector", Map.of(
+        "from", "embeddings",
+        "vector", Map.of(
+                "field", "embedding",
+                "nearest", Map.of(
+                        "vector", List.of(1.0, 0.0, 0.0),
+                        "k", 3,
+                        "distance", "euclidean"
+                )
+        )
+)));
+</code></pre>
+<p>Vector text example:</p>
+<pre><code class="language-java">var textResult = vector.execute(new QueryCommand("vector", Map.of(
+        "queryText", """
+                VECTOR FROM embeddings
+                FIELD embedding
+                NEAREST [1.0, 0.0, 0.0]
+                K 3
+                DISTANCE euclidean
+                """
+)));
 </code></pre>
 <p>This is the lightest way to expose query strings inside your own application without bringing in the Nexum server module.</p>
 <h2 id="run-the-provided-server">Run The Provided Server</h2>
@@ -452,6 +549,28 @@ var sql = new SqlQueryProvider(relational);
 </code></pre>
 <p>Run it in memory-only mode:</p>
 <pre><code class="language-bash">./gradlew :server:run   -Dgraph.db.mode=memory   -Drelational.db.mode=memory
+</code></pre>
+<p>Vector queries use the same <code>POST /query</code> endpoint with a structured provider payload:</p>
+<pre><code class="language-json">{
+  "vector": {
+    "from": "embeddings",
+    "vector": {
+      "field": "embedding",
+      "nearest": {
+        "vector": [1.0, 0.0, 0.0],
+        "k": 3,
+        "distance": "euclidean"
+      }
+    }
+  }
+}
+</code></pre>
+<p>Or with the text form:</p>
+<pre><code class="language-text">VECTOR FROM embeddings
+FIELD embedding
+NEAREST [1.0, 0.0, 0.0]
+K 3
+DISTANCE euclidean
 </code></pre>
 <p>Useful properties:</p>
 <ul>
@@ -492,7 +611,7 @@ var sql = new SqlQueryProvider(relational);
   }
 }
 </code></pre>
-<p>The MCP transport lives entirely in <code>nexum-server</code> and does not change the core database library. See <a href="mcp-server.md"><code>mcp-server.md</code></a> for the current tool catalog and architecture.</p>
+<p>The MCP transport lives entirely in <code>nexum-server</code> and does not change the core database library. See <a href="mcp-server.html"><code>MCP Server</code></a> for the current tool catalog and architecture.</p>
 <h2 id="embed-nexum-in-spring-boot">Embed Nexum In Spring Boot</h2>
 <p>If you already have a Spring Boot application, the usual pattern is:</p>
 <ol>
@@ -504,10 +623,10 @@ var sql = new SqlQueryProvider(relational);
 <p>Example configuration:</p>
 <pre><code class="language-java">package com.example.demo;
 
-import biz.digitalindustry.storage.graph.api.GraphStore;
-import biz.digitalindustry.storage.graph.engine.NativeGraphStore;
-import biz.digitalindustry.storage.relational.api.RelationalStore;
-import biz.digitalindustry.storage.relational.engine.NativeRelationalStore;
+import biz.digitalindustry.db.graph.api.GraphStore;
+import biz.digitalindustry.db.graph.runtime.NativeGraphStore;
+import biz.digitalindustry.db.relational.api.RelationalStore;
+import biz.digitalindustry.db.relational.runtime.NativeRelationalStore;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -528,7 +647,7 @@ class NexumConfig {
 <p>Example controller:</p>
 <pre><code class="language-java">package com.example.demo;
 
-import biz.digitalindustry.storage.graph.api.GraphStore;
+import biz.digitalindustry.db.graph.api.GraphStore;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 

@@ -141,6 +141,16 @@
 
 
         
+            
+
+
+
+
+
+<li class="sidebar__file"><a href="/nexum/vector-facade.html">Vector Facade</a></li>
+
+
+        
         </ul>
     </nav>
 </div>
@@ -149,7 +159,7 @@
         <section class="hero-panel hero-panel--query">
             <p class="eyebrow">Transport Guide</p>
             <h1>Server Query Guide</h1>
-            <p class="hero-copy">The built-in server is a narrow HTTP surface over lib-owned query providers. Cypher routes into the graph facade and SQL routes into the relational facade.</p>
+            <p class="hero-copy">The built-in server is a narrow HTTP surface over lib-owned query providers. Cypher routes into the graph facade, SQL routes into the relational facade, and vector queries follow the same provider-dispatch pattern in either text or structured JSON form.</p>
             <div class="query-banner">
                 <span>Cypher -> graph facade</span>
                 <span>SQL -> relational facade</span>
@@ -159,7 +169,7 @@
         <section class="content-panel prose prose--docs prose--query">
 <h1 id="server-query-guide">Server Query Guide</h1>
 <p>This document describes the current native storage-backed query subset implemented by the Micronaut server.</p>
-<p>The server is only the HTTP transport layer. Query semantics live in the lib module under <code>biz.digitalindustry.storage.query.*</code>.</p>
+<p>The server is only the HTTP transport layer. Query semantics live in the lib module under <code>biz.digitalindustry.db.query.*</code>.</p>
 <p>Primary entry point:</p>
 <ul>
 <li><code>POST /query</code></li>
@@ -168,11 +178,13 @@
 <ul>
 <li><code>graph.db.path=/path/to/database.dbs</code></li>
 <li><code>relational.db.path=/path/to/relational.dbs</code></li>
+<li><code>vector.db.path=/path/to/vector.dbs</code></li>
 </ul>
 <p>The server routes:</p>
 <ul>
 <li><code>cypher</code> queries to the graph facade through <code>CypherQueryProvider</code></li>
 <li><code>sql</code> queries to the relational facade through <code>SqlQueryProvider</code></li>
+<li><code>vector</code> queries to the vector facade through <code>VectorQueryProvider</code></li>
 </ul>
 <p>See <a href="/object-query-api-design.html"><code>object-query-api-design.md</code></a> for the proposed evolution of this provider model toward structured JSON payloads and object operations.</p>
 <h2 id="request-shape">Request Shape</h2>
@@ -181,6 +193,28 @@
 </code></pre>
 <p>SQL-like:</p>
 <pre><code class="language-json">{ "sql": "SELECT * FROM users" }
+</code></pre>
+<p>Vector:</p>
+<pre><code class="language-json">{
+  "vector": {
+    "from": "embeddings",
+    "vector": {
+      "field": "embedding",
+      "nearest": {
+        "vector": [1.0, 0.0, 0.0],
+        "k": 3,
+        "distance": "euclidean"
+      }
+    }
+  }
+}
+</code></pre>
+<p>Vector text:</p>
+<pre><code class="language-text">VECTOR FROM embeddings
+FIELD embedding
+NEAREST [1.0, 0.0, 0.0]
+K 3
+DISTANCE euclidean
 </code></pre>
 <h2 id="supported-cypher-like-operations">Supported Cypher-like Operations</h2>
 <p>Create a node:</p>
@@ -230,6 +264,38 @@ SELECT * FROM users WHERE age BETWEEN 30 AND 40
 <p>Delete:</p>
 <pre><code class="language-sql">DELETE FROM users WHERE id = 'u1'
 </code></pre>
+<h2 id="supported-vector-operations">Supported Vector Operations</h2>
+<p>Nearest-neighbor lookup:</p>
+<pre><code class="language-json">{
+  "vector": {
+    "from": "embeddings",
+    "vector": {
+      "field": "embedding",
+      "nearest": {
+        "vector": [1.0, 0.0, 0.0],
+        "k": 5,
+        "distance": "euclidean"
+      }
+    }
+  }
+}
+</code></pre>
+<p>Payload rules:</p>
+<ul>
+<li><code>from</code> must name an existing relational table</li>
+<li><code>vector.field</code> must name a vector-indexed column on that table</li>
+<li><code>vector.nearest.vector</code> must be a numeric array with the schema-declared dimension</li>
+<li><code>vector.nearest.k</code> must be a positive integer</li>
+<li><code>vector.nearest.distance</code> must match the declared distance metric on the target vector index</li>
+</ul>
+<p>Text rules:</p>
+<ul>
+<li>first line: <code>VECTOR FROM &lt;source&gt;</code></li>
+<li>second line: <code>FIELD &lt;field-name&gt;</code></li>
+<li>third line: <code>NEAREST [&lt;number&gt;, &lt;number&gt;, ...]</code></li>
+<li>fourth line: <code>K &lt;integer&gt;</code></li>
+<li>fifth line: <code>DISTANCE &lt;metric&gt;</code></li>
+</ul>
 <h2 id="response-notes">Response Notes</h2>
 <p>Row results include:</p>
 <ul>
@@ -237,12 +303,17 @@ SELECT * FROM users WHERE age BETWEEN 30 AND 40
 <li>user-defined column properties</li>
 <li>row id mapped to the relational primary key value</li>
 </ul>
+<p>Vector results also include:</p>
+<ul>
+<li><code>distance</code></li>
+</ul>
 <h2 id="constraints">Constraints</h2>
 <ul>
 <li>the syntax is pattern-based, not a general parser</li>
 <li>SQL support is currently single-table only</li>
 <li>SQL schema definitions are narrow and explicit</li>
 <li>relational schema is restored from persisted engine schema on reopen</li>
+<li>vector search expects tables and vector indexes to be defined through the relational API today rather than the SQL subset</li>
 </ul>
 
         </section>

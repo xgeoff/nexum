@@ -48,7 +48,7 @@ tasks.register('benchmark', JavaExec) {
     description = 'Runs the lightweight Nexum benchmark harness.'
     dependsOn testClasses
     classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'biz.digitalindustry.storage.benchmark.NexumBenchmarkMain'
+    mainClass = 'biz.digitalindustry.db.perf.NexumBenchmarkMain'
     def benchmarkProfile = project.findProperty('benchmarkProfile') ?: System.getProperty('benchmarkProfile')
     if (benchmarkProfile != null) {
         systemProperty 'benchmarkProfile', benchmarkProfile

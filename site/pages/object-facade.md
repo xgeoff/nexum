@@ -14,19 +14,19 @@ Status: active native implementation
 
 This facade provides object-style persistence on top of the native record engine.
 
-Source package: [github.com/xgeoff/nexum/tree/main/lib/src/main/java/biz/digitalindustry/storage/object](https://github.com/xgeoff/nexum/tree/main/lib/src/main/java/biz/digitalindustry/storage/object)
+Source package: [github.com/xgeoff/nexum/tree/main/lib/src/main/java/biz/digitalindustry/db/object](https://github.com/xgeoff/nexum/tree/main/lib/src/main/java/biz/digitalindustry/db/object)
 
 ## Key Types
 
-- [`ObjectStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectStore.java)
-- [`ObjectType.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectType.java)
-- [`ObjectCodec.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectCodec.java)
-- [`ObjectTypeDefinition.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectTypeDefinition.java)
-- [`ObjectTypes.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectTypes.java)
-- [`GeneratedObjectTypes.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/GeneratedObjectTypes.java)
-- [`ObjectStoreContext.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/ObjectStoreContext.java)
-- [`StoredObject.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/api/StoredObject.java)
-- [`NativeObjectStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/storage/object/engine/NativeObjectStore.java)
+- [`ObjectStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/object/api/ObjectStore.java)
+- [`ObjectType.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/object/api/ObjectType.java)
+- [`ObjectCodec.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/object/api/ObjectCodec.java)
+- [`ObjectTypeDefinition.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/object/api/ObjectTypeDefinition.java)
+- [`ObjectTypes.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/object/api/ObjectTypes.java)
+- [`GeneratedObjectTypes.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/object/api/GeneratedObjectTypes.java)
+- [`ObjectStoreContext.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/object/api/ObjectStoreContext.java)
+- [`StoredObject.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/object/api/StoredObject.java)
+- [`NativeObjectStore.java`](https://github.com/xgeoff/nexum/blob/main/lib/src/main/java/biz/digitalindustry/db/object/runtime/NativeObjectStore.java)
 
 ## Design
 
@@ -58,7 +58,7 @@ Current API surface:
 
 The reserved `objectKey` field acts as the stable logical identity inside each type namespace.
 
-If your application already uses Jackson DTOs, see the dedicated [`jackson-adapter.md`](jackson-adapter.md) page for the thinner `register/save/get` integration layer.
+If your application already uses Jackson DTOs, see the dedicated [`Jackson Adapter`](jackson-adapter.html) page for the thinner `register/save/get` integration layer.
 
 ## Example
 
@@ -167,7 +167,7 @@ Bean support works best when:
 
 By default, `ObjectTypes.define(PersonBean.class)` infers `String`, integral numeric, floating-point numeric, and boolean bean properties. If you need references or tighter control, you can still override fields with the DSL before `build()`.
 
-If you want broader POJO mapping than the native bean and public-field support, use the optional [`nexum-jackson`](jackson-adapter.md) adapter. It pulls in Jackson deliberately and gives you a smoother DTO and record workflow when your application already uses Jackson for object mapping.
+If you want broader POJO mapping than the native bean and public-field support, use the optional [`nexum-jackson`](jackson-adapter.html) adapter. It pulls in Jackson deliberately and gives you a smoother DTO and record workflow when your application already uses Jackson for object mapping.
 
 ## Registered Definition Mapping
 
@@ -222,7 +222,7 @@ Runtime mapped-object support works when:
 
 This path is schema-driven. Nexum does not scan arbitrary private fields or infer hidden structure from the class.
 
-If you need broader POJO support than this schema-driven native path, see the optional [`nexum-jackson`](jackson-adapter.md) module.
+If you need broader POJO support than this schema-driven native path, see the optional [`nexum-jackson`](jackson-adapter.html) module.
 
 Reference fields use the same builder style:
 

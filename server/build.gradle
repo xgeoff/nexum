@@ -64,7 +64,7 @@ sourceSets {
 }
 
 application {
-    mainClass.set("biz.digitalindustry.storage.server.Application")
+    mainClass.set("biz.digitalindustry.db.server.Application")
 }
 
 tasks.withType(Test).configureEach {
