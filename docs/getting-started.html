@@ -206,6 +206,7 @@
 <p>Run the benchmark harness:</p>
 <pre><code class="language-bash">./gradlew :lib:benchmark
 </code></pre>
+<p>The benchmark harness lives under <code>lib/src/test/java</code> and runs on the test runtime classpath. It is not packaged into the core library jar.</p>
 <h2 id="use-the-core-library-directly">Use The Core Library Directly</h2>
 <p>If you are working inside this repository, depend on the module directly:</p>
 <pre><code class="language-gradle">dependencies {
@@ -545,10 +546,13 @@ var result = vector.execute(new QueryCommand("vector", Map.of(
 <p>This is the lightest way to expose query strings inside your own application without bringing in the Nexum server module.</p>
 <h2 id="run-the-provided-server">Run The Provided Server</h2>
 <p>Start the server against file-backed stores:</p>
-<pre><code class="language-bash">./gradlew :server:run   -Dgraph.db.path=./data/nexum-graph.dbs   -Drelational.db.path=./data/nexum-relational.dbs
+<pre><code class="language-bash">./gradlew :server:run   -Dcommon.db.dir=./data
 </code></pre>
 <p>Run it in memory-only mode:</p>
-<pre><code class="language-bash">./gradlew :server:run   -Dgraph.db.mode=memory   -Drelational.db.mode=memory
+<pre><code class="language-bash">./gradlew :server:run   -Dcommon.db.mode=memory
+</code></pre>
+<p>If you want split storage per facade, override only the facades that should diverge:</p>
+<pre><code class="language-bash">./gradlew :server:run   -Dcommon.db.mode=file   -Dcommon.db.page-size=8192   -Dgraph.db.path=./data/nexum-graph.dbs   -Drelational.db.path=./data/nexum-relational.dbs   -Dobject.db.path=./data/nexum-object.dbs   -Dvector.db.path=./data/nexum-vector.dbs
 </code></pre>
 <p>Vector queries use the same <code>POST /query</code> endpoint with a structured provider payload:</p>
 <pre><code class="language-json">{
@@ -574,6 +578,11 @@ DISTANCE euclidean
 </code></pre>
 <p>Useful properties:</p>
 <ul>
+<li><code>common.db.mode=file|memory</code></li>
+<li><code>common.db.dir=./data</code></li>
+<li><code>common.db.page-size=8192</code></li>
+<li><code>common.db.max-wal-bytes=536870912</code></li>
+<li><code>common.db.checkpoint-on-close=true</code></li>
 <li><code>graph.db.mode=file|memory</code></li>
 <li><code>graph.db.path=./data/nexum-graph.dbs</code></li>
 <li><code>graph.db.page-size=8192</code></li>
@@ -584,7 +593,24 @@ DISTANCE euclidean
 <li><code>relational.db.page-size=8192</code></li>
 <li><code>relational.db.max-wal-bytes=536870912</code></li>
 <li><code>relational.db.checkpoint-on-close=true</code></li>
+<li><code>object.db.mode=file|memory</code></li>
+<li><code>object.db.path=./data/nexum-object.dbs</code></li>
+<li><code>object.db.page-size=8192</code></li>
+<li><code>object.db.max-wal-bytes=536870912</code></li>
+<li><code>object.db.checkpoint-on-close=true</code></li>
+<li><code>vector.db.mode=file|memory</code></li>
+<li><code>vector.db.path=./data/nexum-vector.dbs</code></li>
+<li><code>vector.db.page-size=8192</code></li>
+<li><code>vector.db.max-wal-bytes=536870912</code></li>
+<li><code>vector.db.checkpoint-on-close=true</code></li>
 </ul>
+<p>Precedence:</p>
+<ol>
+<li><code>common.db.*</code></li>
+<li>facade-specific override such as <code>graph.db.*</code></li>
+<li>built-in default</li>
+</ol>
+<p><code>common.db.dir</code> applies shared file-backed defaults without pointing every facade at one identical <code>.dbs</code> file. That restriction is deliberate: the current server runs separate facade-owned stores and does not treat one shared file as a safe default.</p>
 <h2 id="use-the-mcp-transport">Use The MCP Transport</h2>
 <p>If you want LLM-oriented tool access instead of direct REST calls, the optional MCP transport is exposed by the same <code>nexum-server</code> process at <code>POST /mcp</code>.</p>
 <p>Example initialize request:</p>

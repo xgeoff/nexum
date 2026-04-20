@@ -13,8 +13,6 @@ import biz.digitalindustry.db.model.ReferenceValue;
 import biz.digitalindustry.db.schema.IndexDefinition;
 import biz.digitalindustry.db.schema.IndexKind;
 import biz.digitalindustry.db.schema.ValueType;
-import io.micronaut.context.annotation.Property;
-import io.micronaut.context.annotation.Value;
 import jakarta.annotation.PreDestroy;
 import jakarta.inject.Singleton;
 
@@ -37,23 +35,21 @@ public class ObjectStoreService implements AutoCloseable {
     private final boolean memoryOnly;
     private final long pageSize;
     private final long maxWalBytes;
+    private final boolean checkpointOnClose;
     private final ReentrantLock writeLock = new ReentrantLock();
     private final Map<String, RegisteredType> types = new ConcurrentHashMap<>();
     private NativeObjectStore delegate;
 
-    public ObjectStoreService(
-            @Property(name = "object.db.path", defaultValue = "./data/nexum-object.dbs") String configuredPath,
-            @Value("${object.db.mode:file}") String configuredMode,
-            @Value("${object.db.page-size:8192}") long configuredPageSize,
-            @Value("${object.db.max-wal-bytes:536870912}") long configuredMaxWalBytes
-    ) throws IOException {
-        memoryOnly = "memory".equalsIgnoreCase(configuredMode);
-        pageSize = configuredPageSize;
-        maxWalBytes = configuredMaxWalBytes;
+    public ObjectStoreService(DatabaseSettingsResolver settingsResolver) throws IOException {
+        ResolvedDatabaseSettings settings = settingsResolver.resolve("object", "./data/nexum-object.dbs", "memory:nexum-object");
+        memoryOnly = settings.memoryOnly();
+        pageSize = settings.pageSize();
+        maxWalBytes = settings.maxWalBytes();
+        checkpointOnClose = settings.checkpointOnClose();
         if (memoryOnly) {
-            dbPath = Path.of("memory:nexum-object");
+            dbPath = Path.of(settings.memoryName());
         } else {
-            dbPath = Path.of(configuredPath);
+            dbPath = settings.dbPath();
             Path parent = dbPath.getParent();
             if (parent != null) {
                 Files.createDirectories(parent);
@@ -335,7 +331,7 @@ public class ObjectStoreService implements AutoCloseable {
     private void openDatabase() {
         StorageConfig config = memoryOnly
                 ? StorageConfig.memory(dbPath.toString(), pageSize, maxWalBytes)
-                : StorageConfig.file(dbPath.toString(), pageSize, maxWalBytes, true);
+                : StorageConfig.file(dbPath.toString(), pageSize, maxWalBytes, checkpointOnClose);
         delegate = new NativeObjectStore(config);
         types.clear();
         for (ObjectTypeDefinition definition : delegate.generatedTypeDefinitions()) {

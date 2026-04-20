@@ -7,8 +7,6 @@ import biz.digitalindustry.db.relational.runtime.NativeRelationalStore;
 import biz.digitalindustry.db.engine.api.StorageConfig;
 import biz.digitalindustry.db.model.FieldValue;
 import biz.digitalindustry.db.model.Vector;
-import io.micronaut.context.annotation.Property;
-import io.micronaut.context.annotation.Value;
 import jakarta.annotation.PreDestroy;
 import jakarta.inject.Singleton;
 
@@ -30,21 +28,16 @@ public class RelationalStoreService implements RelationalStore {
     private final ReentrantLock writeLock = new ReentrantLock();
     private RelationalStore delegate;
 
-    public RelationalStoreService(
-            @Property(name = "relational.db.path", defaultValue = "./data/nexum-relational.dbs") String configuredPath,
-            @Value("${relational.db.mode:file}") String configuredMode,
-            @Value("${relational.db.page-size:8192}") long configuredPageSize,
-            @Value("${relational.db.max-wal-bytes:536870912}") long configuredMaxWalBytes,
-            @Value("${relational.db.checkpoint-on-close:true}") boolean configuredCheckpointOnClose
-    ) throws IOException {
-        memoryOnly = "memory".equalsIgnoreCase(configuredMode);
-        pageSize = configuredPageSize;
-        maxWalBytes = configuredMaxWalBytes;
-        checkpointOnClose = configuredCheckpointOnClose;
+    public RelationalStoreService(DatabaseSettingsResolver settingsResolver) throws IOException {
+        ResolvedDatabaseSettings settings = settingsResolver.resolve("relational", "./data/nexum-relational.dbs", "memory:nexum-relational");
+        memoryOnly = settings.memoryOnly();
+        pageSize = settings.pageSize();
+        maxWalBytes = settings.maxWalBytes();
+        checkpointOnClose = settings.checkpointOnClose();
         if (memoryOnly) {
-            dbPath = Path.of("memory:nexum-relational");
+            dbPath = Path.of(settings.memoryName());
         } else {
-            dbPath = Path.of(configuredPath);
+            dbPath = settings.dbPath();
             Path parent = dbPath.getParent();
             if (parent != null) {
                 Files.createDirectories(parent);

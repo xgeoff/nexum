@@ -4,8 +4,6 @@ import biz.digitalindustry.db.graph.runtime.NativeGraphStore;
 import biz.digitalindustry.db.graph.model.GraphEdgeRecord;
 import biz.digitalindustry.db.graph.model.GraphNodeRecord;
 import biz.digitalindustry.db.engine.api.StorageConfig;
-import io.micronaut.context.annotation.Value;
-import io.micronaut.context.annotation.Property;
 import jakarta.annotation.PreDestroy;
 import jakarta.inject.Singleton;
 
@@ -26,21 +24,16 @@ public class GraphStore implements biz.digitalindustry.db.graph.api.GraphStore {
     private final ReentrantLock writeLock = new ReentrantLock();
     private biz.digitalindustry.db.graph.api.GraphStore delegate;
 
-    public GraphStore(
-            @Property(name = "graph.db.path", defaultValue = "./data/nexum-graph.dbs") String configuredPath,
-            @Value("${graph.db.mode:file}") String configuredMode,
-            @Value("${graph.db.page-size:8192}") long configuredPageSize,
-            @Value("${graph.db.max-wal-bytes:536870912}") long configuredMaxWalBytes,
-            @Value("${graph.db.checkpoint-on-close:true}") boolean configuredCheckpointOnClose
-    ) throws IOException {
-        memoryOnly = "memory".equalsIgnoreCase(configuredMode);
-        pageSize = configuredPageSize;
-        maxWalBytes = configuredMaxWalBytes;
-        checkpointOnClose = configuredCheckpointOnClose;
+    public GraphStore(DatabaseSettingsResolver settingsResolver) throws IOException {
+        ResolvedDatabaseSettings settings = settingsResolver.resolve("graph", "./data/nexum-graph.dbs", "memory:nexum-graph");
+        memoryOnly = settings.memoryOnly();
+        pageSize = settings.pageSize();
+        maxWalBytes = settings.maxWalBytes();
+        checkpointOnClose = settings.checkpointOnClose();
         if (memoryOnly) {
-            dbPath = Path.of("memory:nexum-graph");
+            dbPath = Path.of(settings.memoryName());
         } else {
-            dbPath = Path.of(configuredPath);
+            dbPath = settings.dbPath();
             Path parent = dbPath.getParent();
             if (parent != null) {
                 Files.createDirectories(parent);

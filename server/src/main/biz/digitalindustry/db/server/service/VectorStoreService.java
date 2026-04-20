@@ -8,8 +8,6 @@ import biz.digitalindustry.db.vector.api.VectorDocument;
 import biz.digitalindustry.db.vector.api.VectorDocumentMatch;
 import biz.digitalindustry.db.vector.api.VectorStore;
 import biz.digitalindustry.db.vector.runtime.NativeVectorStore;
-import io.micronaut.context.annotation.Property;
-import io.micronaut.context.annotation.Value;
 import jakarta.annotation.PreDestroy;
 import jakarta.inject.Singleton;
 
@@ -30,21 +28,16 @@ public class VectorStoreService implements VectorStore {
     private final ReentrantLock writeLock = new ReentrantLock();
     private VectorStore delegate;
 
-    public VectorStoreService(
-            @Property(name = "vector.db.path", defaultValue = "./data/nexum-vector.dbs") String configuredPath,
-            @Value("${vector.db.mode:file}") String configuredMode,
-            @Value("${vector.db.page-size:8192}") long configuredPageSize,
-            @Value("${vector.db.max-wal-bytes:536870912}") long configuredMaxWalBytes,
-            @Value("${vector.db.checkpoint-on-close:true}") boolean configuredCheckpointOnClose
-    ) throws IOException {
-        memoryOnly = "memory".equalsIgnoreCase(configuredMode);
-        pageSize = configuredPageSize;
-        maxWalBytes = configuredMaxWalBytes;
-        checkpointOnClose = configuredCheckpointOnClose;
+    public VectorStoreService(DatabaseSettingsResolver settingsResolver) throws IOException {
+        ResolvedDatabaseSettings settings = settingsResolver.resolve("vector", "./data/nexum-vector.dbs", "memory:nexum-vector");
+        memoryOnly = settings.memoryOnly();
+        pageSize = settings.pageSize();
+        maxWalBytes = settings.maxWalBytes();
+        checkpointOnClose = settings.checkpointOnClose();
         if (memoryOnly) {
-            dbPath = Path.of("memory:nexum-vector");
+            dbPath = Path.of(settings.memoryName());
         } else {
-            dbPath = Path.of(configuredPath);
+            dbPath = settings.dbPath();
             Path parent = dbPath.getParent();
             if (parent != null) {
                 Files.createDirectories(parent);

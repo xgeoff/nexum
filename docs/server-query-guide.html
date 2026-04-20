@@ -176,10 +176,19 @@
 </ul>
 <p>Configuration:</p>
 <ul>
+<li><code>common.db.dir=/path/to/data-directory</code></li>
 <li><code>graph.db.path=/path/to/database.dbs</code></li>
 <li><code>relational.db.path=/path/to/relational.dbs</code></li>
+<li><code>object.db.path=/path/to/object.dbs</code></li>
 <li><code>vector.db.path=/path/to/vector.dbs</code></li>
 </ul>
+<p>Resolution order:</p>
+<ol>
+<li><code>common.db.*</code></li>
+<li>facade-specific override such as <code>graph.db.*</code></li>
+<li>built-in default</li>
+</ol>
+<p><code>common.db.dir</code> is used only to derive per-facade default file locations. The current server does not expose a shared <code>common.db.path</code> because it does not model all facades as one shared physical database file.</p>
 <p>The server routes:</p>
 <ul>
 <li><code>cypher</code> queries to the graph facade through <code>CypherQueryProvider</code></li>

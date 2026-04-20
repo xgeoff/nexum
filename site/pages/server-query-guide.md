@@ -18,9 +18,19 @@ Primary entry point:
 
 Configuration:
 
+- `common.db.dir=/path/to/data-directory`
 - `graph.db.path=/path/to/database.dbs`
 - `relational.db.path=/path/to/relational.dbs`
+- `object.db.path=/path/to/object.dbs`
 - `vector.db.path=/path/to/vector.dbs`
+
+Resolution order:
+
+1. `common.db.*`
+2. facade-specific override such as `graph.db.*`
+3. built-in default
+
+`common.db.dir` is used only to derive per-facade default file locations. The current server does not expose a shared `common.db.path` because it does not model all facades as one shared physical database file.
 
 The server routes:
 

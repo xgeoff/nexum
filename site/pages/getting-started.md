@@ -62,6 +62,8 @@ Run the benchmark harness:
 ./gradlew :lib:benchmark
 ```
 
+The benchmark harness lives under `lib/src/test/java` and runs on the test runtime classpath. It is not packaged into the core library jar.
+
 ## Use The Core Library Directly
 
 If you are working inside this repository, depend on the module directly:
@@ -463,16 +465,26 @@ Start the server against file-backed stores:
 
 ```bash
 ./gradlew :server:run \
-  -Dgraph.db.path=./data/nexum-graph.dbs \
-  -Drelational.db.path=./data/nexum-relational.dbs
+  -Dcommon.db.dir=./data
 ```
 
 Run it in memory-only mode:
 
 ```bash
 ./gradlew :server:run \
-  -Dgraph.db.mode=memory \
-  -Drelational.db.mode=memory
+  -Dcommon.db.mode=memory
+```
+
+If you want split storage per facade, override only the facades that should diverge:
+
+```bash
+./gradlew :server:run \
+  -Dcommon.db.mode=file \
+  -Dcommon.db.page-size=8192 \
+  -Dgraph.db.path=./data/nexum-graph.dbs \
+  -Drelational.db.path=./data/nexum-relational.dbs \
+  -Dobject.db.path=./data/nexum-object.dbs \
+  -Dvector.db.path=./data/nexum-vector.dbs
 ```
 
 Vector queries use the same `POST /query` endpoint with a structured provider payload:
@@ -505,6 +517,11 @@ DISTANCE euclidean
 
 Useful properties:
 
+- `common.db.mode=file|memory`
+- `common.db.dir=./data`
+- `common.db.page-size=8192`
+- `common.db.max-wal-bytes=536870912`
+- `common.db.checkpoint-on-close=true`
 - `graph.db.mode=file|memory`
 - `graph.db.path=./data/nexum-graph.dbs`
 - `graph.db.page-size=8192`
@@ -515,6 +532,24 @@ Useful properties:
 - `relational.db.page-size=8192`
 - `relational.db.max-wal-bytes=536870912`
 - `relational.db.checkpoint-on-close=true`
+- `object.db.mode=file|memory`
+- `object.db.path=./data/nexum-object.dbs`
+- `object.db.page-size=8192`
+- `object.db.max-wal-bytes=536870912`
+- `object.db.checkpoint-on-close=true`
+- `vector.db.mode=file|memory`
+- `vector.db.path=./data/nexum-vector.dbs`
+- `vector.db.page-size=8192`
+- `vector.db.max-wal-bytes=536870912`
+- `vector.db.checkpoint-on-close=true`
+
+Precedence:
+
+1. `common.db.*`
+2. facade-specific override such as `graph.db.*`
+3. built-in default
+
+`common.db.dir` applies shared file-backed defaults without pointing every facade at one identical `.dbs` file. That restriction is deliberate: the current server runs separate facade-owned stores and does not treat one shared file as a safe default.
 
 ## Use The MCP Transport
 

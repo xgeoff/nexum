@@ -73,6 +73,8 @@ Run the lightweight benchmark harness:
 ./gradlew :lib:benchmark
 ```
 
+The benchmark harness is test-only infrastructure under `lib/src/test/java`. It is not part of the shipped library artifact.
+
 Run the larger-scale benchmark profile:
 
 ```bash
@@ -82,19 +84,24 @@ Run the larger-scale benchmark profile:
 Run the server:
 
 ```bash
-./gradlew :server:run -Dgraph.db.path=./data/nexum-graph.dbs
+./gradlew :server:run -Dcommon.db.dir=./data
 ```
 
-If `graph.db.path` is omitted, the server uses `./data/nexum-graph.dbs`.
+If `common.db.dir` is omitted, each facade falls back to its own default path.
 
 Run the server in true memory-only mode:
 
 ```bash
-./gradlew :server:run -Dgraph.db.mode=memory
+./gradlew :server:run -Dcommon.db.mode=memory
 ```
 
 Server storage properties:
 
+- `common.db.mode=file|memory`
+- `common.db.dir=./data`
+- `common.db.page-size=8192`
+- `common.db.max-wal-bytes=536870912`
+- `common.db.checkpoint-on-close=true`
 - `graph.db.mode=file|memory`
 - `graph.db.path=./data/nexum-graph.dbs`
 - `graph.db.page-size=8192`
@@ -110,6 +117,14 @@ Server storage properties:
 - `vector.db.page-size=8192`
 - `vector.db.max-wal-bytes=536870912`
 - `vector.db.checkpoint-on-close=true`
+
+Resolution order is:
+
+1. `common.db.*`
+2. facade-specific override such as `graph.db.*`
+3. built-in default
+
+`common.db.dir` is intentionally directory-only. The server derives separate default files under that directory for each facade. This avoids implying that the current server supports one shared physical database file across graph, relational, object, and vector services.
 
 The benchmark harness now uses explicit files under `build/benchmarks/` and cleans them up after each run.
 
